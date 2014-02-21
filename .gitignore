@@ -1,0 +1,16 @@
+*.html
+*.pdf
+
+# editor generated files
+*~
+\#*
+
+# R related
+.Rhistory
+.Rproj*
+*.Rproj
+
+# OS generated files #
+######################
+.DS_Store
+
