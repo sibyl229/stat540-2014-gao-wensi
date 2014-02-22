@@ -1,14 +1,61 @@
-Title
+Assignment 1
 ========================================================
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring web pages (click the **MD** toolbar button for help on Markdown).
+### Intro ###
 
-When you click the **Knit HTML** button a web page will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+This analysis is based on publicly-available expression study of mouse brain tissue with single gene mutation (http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE7191). 
 
+S1P2, when mutated, results in seizures. While mutated S1P3, a related gene, does not. In this study, gene expression of two brain regions (hippocampus and neocortex) from three mouse strains (wild type, S1P2 mutant, and S1P3 mutant) are measured. Additional information of gender of the mice and processing date is available in the data being analyzed.
+
+Expression is measured on the Affymetrix MGU74Av2 platform.
 ```{r}
-summary(cars)
+library(plyr)
+library(ggplot2)
+library(xtable)
 ```
 
+
+```{r include = FALSE}
+html_print <- function(x, ..., digits = 0, include.rownames = FALSE){
+  print(xtable(x, digits = digits, ...), 
+        type = 'html', include.rownames = include.rownames)
+}
+```
+
+```{r}
+design <- read.table("../data/mouseBrain/GSE7191-design.txt",
+                     row.names=1, header=TRUE)
+expDat <- read.table("../data/mouseBrain/GSE7191-data.txt",
+                     row.name="probe", header=TRUE)
+```
+
+#### Q1) Basic Characteristics ####
+
+a) Dimensionality of the data
+```{r}
+dim(expDat)  # [probes, samples]
+dim(design)  # [samples, design factors]
+fa <- colnames(design) # design factors
+```
+
+b) Factors in experimental design
+```{r}
+with(design, table(Genotype))
+with(design, table(BrainRegion))
+with(design, table(Sex))
+with(design, table(DateRun))
+```
+
+```{r results='asis'}
+#maxLevel <- max(laply(design, nlevels))
+faCounts <- ldply(design, function(x){
+  faFeq <- table(x)
+  iFaCounts <- data.frame(faFeq)
+  colnames(iFaCounts) <- c("factor.level", "counts")
+  return(iFaCounts)
+})
+html_print(faCounts)
+```
 You can also embed plots, for example:
 
 ```{r fig.width=7, fig.height=6}
