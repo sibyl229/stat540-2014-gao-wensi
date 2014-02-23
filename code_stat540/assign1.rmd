@@ -127,7 +127,14 @@ ftable(x)
 
 ### Q2 Examine the sample correlation matrix
 
-#### 
+#### a)
+
+```{r}
+sampleOrd <- with(design, 
+                  order(DateRun, Genotype, BrainRegion, Sex))
+heatmap(hDat, Rowv = NA, Colv = NA, scale="none", margins = c(5, 8),
+        col = jBuPuFun(256))
+```
 
 
 ```{r fig.width=7, fig.height=6}
