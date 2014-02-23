@@ -15,6 +15,19 @@ Expression is measured on the Affymetrix MGU74Av2 platform.
 library(plyr)
 library(ggplot2)
 library(xtable)
+library(RColorBrewer)
+library(gplots)
+```
+
+```
+## KernSmooth 2.23 loaded
+## Copyright M. P. Wand 1997-2009
+## 
+## Attaching package: 'gplots'
+## 
+## The following object is masked from 'package:stats':
+## 
+##     lowess
 ```
 
 
@@ -33,6 +46,29 @@ expDat <- read.table("../data/mouseBrain/GSE7191-data.txt",
 
 # order expression data columns (samples) by the rows in the design table
 expDat <- expDat[, row.names(design)]
+```
+
+
+
+```r
+# create new factor for DateRun
+# levels are order by increasing date, and labeled by "Day-1", etc
+newDateRun <- with(design, {
+  dates <- as.Date(levels(design$DateRun),"%m/%d/%y")
+  nfDateRun <- factor(DateRun, levels(DateRun)[order(dates)])
+  levels(nfDateRun) <- paste("Day", 1:nlevels(DateRun), sep="-") 
+  return(nfDateRun)
+})
+design$DateRun <- newDateRun
+
+# more informative column names for expDat
+colnames(expDat) <- with(design,
+                       paste(DateRun, Genotype, BrainRegion, Sex, sep="_"))
+
+# define sample order
+sampleOrd <- with(design, order(DateRun, Genotype, BrainRegion, Sex))
+expDat <- expDat[,sampleOrd]
+design <- design[sampleOrd,]
 ```
 
 
@@ -104,8 +140,8 @@ with(design, table(DateRun))
 
 ```
 DateRun
-01/16/04 03/11/04 07/23/04 08/14/03 08/21/03 09/11/03 10/23/03 12/18/03 
-       7        4        4        8        8        7        7        5 
+Day-1 Day-2 Day-3 Day-4 Day-5 Day-6 Day-7 Day-8 
+    8     8     7     7     5     7     4     4 
 ```
 
 
@@ -122,7 +158,7 @@ html_print(addmargins(x))
 ```
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
-<!-- Sat Feb 22 20:18:14 2014 -->
+<!-- Sun Feb 23 10:23:09 2014 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH> S1P2_KO </TH> <TH> S1P3_KO </TH> <TH> Wild_type </TH> <TH> Sum </TH>  </TR>
   <TR> <TD align="right"> hippocampus </TD> <TD align="right"> 10 </TD> <TD align="right"> 5 </TD> <TD align="right"> 10 </TD> <TD align="right"> 25 </TD> </TR>
@@ -158,11 +194,11 @@ ftable(x)
 ```
 
 ```
-          DateRun 01/16/04 03/11/04 07/23/04 08/14/03 08/21/03 09/11/03 10/23/03 12/18/03
-Genotype                                                                                 
-S1P2_KO                  0        4        4        4        0        0        7        1
-S1P3_KO                  7        0        0        0        0        0        0        3
-Wild_type                0        0        0        4        8        7        0        1
+          DateRun Day-1 Day-2 Day-3 Day-4 Day-5 Day-6 Day-7 Day-8
+Genotype                                                         
+S1P2_KO               4     0     0     7     1     0     4     4
+S1P3_KO               0     0     0     0     3     7     0     0
+Wild_type             4     8     7     0     1     0     0     0
 ```
 
 ```r
@@ -171,11 +207,11 @@ ftable(x)
 ```
 
 ```
-          DateRun 01/16/04 03/11/04 07/23/04 08/14/03 08/21/03 09/11/03 10/23/03 12/18/03
-Genotype                                                                                 
-S1P2_KO                  0        4        4        4        0        0        7        1
-S1P3_KO                  7        0        0        0        0        0        0        3
-Wild_type                0        0        0        4        8        7        0        1
+          DateRun Day-1 Day-2 Day-3 Day-4 Day-5 Day-6 Day-7 Day-8
+Genotype                                                         
+S1P2_KO               4     0     0     7     1     0     4     4
+S1P3_KO               0     0     0     0     3     7     0     0
+Wild_type             4     8     7     0     1     0     0     0
 ```
 
 
@@ -199,7 +235,7 @@ pDat <- data.frame(design, gExp = unlist(expDat[theProbe, ]))
 ggplot(pDat, aes(x=Genotype, y=gExp, color=BrainRegion)) + geom_point(alpha=0.6) + facet_grid(.~Sex)
 ```
 
-![plot of chunk unnamed-chunk-11](figure/unnamed-chunk-11.png) 
+![plot of chunk unnamed-chunk-12](figure/unnamed-chunk-12.png) 
 
 
 Clearly something isn't right here. The probe reading of S1P2 in the S1P2 knockout group is supposed to decrease, yet the reading is the same or even higher there than that in the wildtype. 
@@ -208,7 +244,10 @@ Clearly something isn't right here. The probe reading of S1P2 in the S1P2 knocko
 
 
 ```r
+# compute mean expression at each combination of Genetype, BrainRegion and Sex
 pMean <- aggregate(gExp ~ Genotype + BrainRegion + Sex, pDat, FUN = mean)
+
+# display the result in wide form
 x <- xtabs(gExp~BrainRegion+Sex+Genotype,pMean)
 ftable(x)
 ```
@@ -222,9 +261,53 @@ neocortex   female            6.608   6.398     6.645
             male              6.518   6.851     6.587
 ```
 
+
+
+
+### Q2 Examine the sample correlation matrix
+
+#### a)
+
+
+
+
 ```r
-# html_print(pMean, digits=3)
+# creating some color palette
+jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
+jGreysFun <- colorRampPalette(brewer.pal(n = 9, "Greys"))
 ```
+
+
+
+```r
+sampleCor <- cor(expDat)
+heatmap.2(sampleCor, 
+          Rowv = FALSE, dendrogram="none",
+          symm=TRUE, margins=c(15,15),
+          trace="none", scale="none", col = jGreysFun(256))
+```
+
+![plot of chunk unnamed-chunk-15](figure/unnamed-chunk-15.png) 
+
+
+
+```r
+#heatmap(expDat, Rowv = NA, Colv = NA, scale="none", margins = c(5, 8), col = jBuPuFun(256))
+set.seed(540)
+hSize <- 200
+theseProbes <- sample(1:nrow(expDat), hSize)
+hDat <- expDat[theseProbes, sampleOrd]
+hDat <- as.matrix(hDat)
+colnames(hDat) <- with(design[sampleOrd,],
+                       paste(DateRun, Genotype, BrainRegion, Sex, sep="_"))
+
+
+jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
+heatmap(hDat, Colv = NA, Rowv = NA, scale=c("column"), 
+        margins = c(5, 8), col = jPurplesFun(256))
+```
+
+![plot of chunk unnamed-chunk-16](figure/unnamed-chunk-16.png) 
 
 
 
@@ -233,6 +316,6 @@ neocortex   female            6.608   6.398     6.645
 plot(cars)
 ```
 
-![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13.png) 
+![plot of chunk unnamed-chunk-17](figure/unnamed-chunk-17.png) 
 
 

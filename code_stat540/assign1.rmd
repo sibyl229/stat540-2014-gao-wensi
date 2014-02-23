@@ -14,6 +14,8 @@ Expression is measured on the Affymetrix MGU74Av2 platform.
 library(plyr)
 library(ggplot2)
 library(xtable)
+library(RColorBrewer)
+library(gplots)
 ```
 
 ```{r include = FALSE}
@@ -38,6 +40,28 @@ expDat <- read.table("../data/mouseBrain/GSE7191-data.txt",
 
 # order expression data columns (samples) by the rows in the design table
 expDat <- expDat[, row.names(design)]
+```
+
+```{r}
+# create new factor for DateRun
+# levels are order by increasing date, and labeled by "Day-1", etc
+newDateRun <- with(design, {
+  dates <- as.Date(levels(design$DateRun),"%m/%d/%y")
+  nfDateRun <- factor(DateRun, levels(DateRun)[order(dates)])
+  levels(nfDateRun) <- paste("Day", 1:nlevels(DateRun), sep="-") 
+  return(nfDateRun)
+})
+design$DateRun <- newDateRun
+
+# more informative column names for expDat
+colnames(expDat) <- with(design,
+                       paste(DateRun, Genotype, BrainRegion, Sex, sep="_"))
+
+# define sample order
+sampleOrd <- with(design, order(DateRun, Genotype, BrainRegion, Sex))
+expDat <- expDat[,sampleOrd]
+design <- design[sampleOrd,]
+
 ```
 
 
@@ -130,10 +154,33 @@ ftable(x)
 #### a)
 
 ```{r}
-sampleOrd <- with(design, 
-                  order(DateRun, Genotype, BrainRegion, Sex))
-heatmap(hDat, Rowv = NA, Colv = NA, scale="none", margins = c(5, 8),
-        col = jBuPuFun(256))
+# creating some color palette
+jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
+jGreysFun <- colorRampPalette(brewer.pal(n = 9, "Greys"))
+```
+
+```{r fig.width=10, fig.height=10}
+sampleCor <- cor(expDat)
+heatmap.2(sampleCor, 
+          Rowv = FALSE, dendrogram="none",
+          symm=TRUE, margins=c(15,15),
+          trace="none", scale="none", col = jGreysFun(256))
+```
+
+```{r}
+#heatmap(expDat, Rowv = NA, Colv = NA, scale="none", margins = c(5, 8), col = jBuPuFun(256))
+set.seed(540)
+hSize <- 200
+theseProbes <- sample(1:nrow(expDat), hSize)
+hDat <- expDat[theseProbes, sampleOrd]
+hDat <- as.matrix(hDat)
+colnames(hDat) <- with(design[sampleOrd,],
+                       paste(DateRun, Genotype, BrainRegion, Sex, sep="_"))
+
+
+jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
+heatmap(hDat, Colv = NA, Rowv = NA, scale=c("column"), 
+        margins = c(5, 8), col = jPurplesFun(256))
 ```
 
 
