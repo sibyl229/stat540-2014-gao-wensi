@@ -1,6 +1,8 @@
 Assignment 1
 ========================================================
 
+Wen Si (Sibyl) Gao
+
 ### Intro ###
 
 This analysis is based on publicly-available expression study of mouse brain tissue with single gene mutation (http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE7191). 
@@ -14,9 +16,15 @@ library(ggplot2)
 library(xtable)
 ```
 
+```{r include = FALSE}
+library(knitr)
+opts_chunk$set(tidy = FALSE, 
+               comment=NA,
+               digits = 3)
+```
 
 ```{r include = FALSE}
-html_print <- function(x, ..., digits = 0, include.rownames = FALSE){
+html_print <- function(x, ..., digits = 0, include.rownames = TRUE){
   print(xtable(x, digits = digits, ...), 
         type = 'html', include.rownames = include.rownames)
 }
@@ -27,27 +35,36 @@ design <- read.table("../data/mouseBrain/GSE7191-design.txt",
                      row.names=1, header=TRUE)
 expDat <- read.table("../data/mouseBrain/GSE7191-data.txt",
                      row.name="probe", header=TRUE)
+
+# order expression data columns (samples) by the rows in the design table
+expDat <- expDat[, row.names(design)]
 ```
 
-#### Q1) Basic Characteristics ####
 
-a) Dimensionality of the data
+### Q1) Basic Characteristics ###
+
+#### a) Dimensionality of the data
 ```{r}
 dim(expDat)  # [probes, samples]
 dim(design)  # [samples, design factors]
 fa <- colnames(design) # design factors
 ```
 
-b) Factors in experimental design
+
+#### b) Factors in experimental design
+
+Looking at each factor individually, samples are mostly evenly distributed across different levels of a factor. The exception is that there is smaller sample size for S1P3 knockout group.
+
 ```{r}
 with(design, table(Genotype))
 with(design, table(BrainRegion))
 with(design, table(Sex))
 with(design, table(DateRun))
+
 ```
 
-```{r results='asis'}
-#maxLevel <- max(laply(design, nlevels))
+```{r include=FALSE, results='asis'}
+
 faCounts <- ldply(design, function(x){
   faFeq <- table(x)
   iFaCounts <- data.frame(faFeq)
@@ -56,7 +73,62 @@ faCounts <- ldply(design, function(x){
 })
 html_print(faCounts)
 ```
-You can also embed plots, for example:
+
+
+Cross-tabulating genotype and brain region also finds no issue with the factorial experimental design. As sample sizes are relatively even across all genotype-brain region cobminations (besides the issue of fewer S1P3 knockouts):
+
+```{r results='asis'}
+x <- with(design, table(BrainRegion, Genotype))
+html_print(addmargins(x))
+```
+
+Even as the gender of the mouse is taken into account. The design seem okay:
+```{r}
+x <- with(design, table(Sex, BrainRegion, Genotype))
+ftable(x)
+```
+
+
+Problem seem to appear when examining DateRun as a factor. DateRun could potentially confound both Genotype and gender of the mouse. It is often the case that a single day contains only samples of the same genotype and samples of the same gender. As a result, one may not know if different expression readings is due to different genotypes, or different dates the sample is run. It's the same case with gender of the mouse. If DateRun (the batch effect) is an important factor of the expression readings, one has to correct for this effect. 
+
+```{r}
+x <- with(design, table(Genotype, DateRun))
+ftable(x)
+x <- with(design, table(Genotype, DateRun))
+ftable(x)
+```
+
+
+#### c) Explore differenitial readings on one probe
+
+I decided to examining the readings of the probe for S1P2 (S1pr2). The probe for S1P2 is 99372_at on this platform.
+
+```{r fig.width=10, fig.height=4}
+(theProbe <- which(row.names(expDat) == '99372_at'))
+pDat <- data.frame(design, gExp = unlist(expDat[theProbe, ]))
+
+ggplot(pDat, aes(x=Genotype, y=gExp, color=BrainRegion)) + geom_point(alpha=0.6) + facet_grid(.~Sex)
+```
+
+Clearly something isn't right here. The probe reading of S1P2 in the S1P2 knockout group is supposed to decrease, yet the reading is the same or even higher there than that in the wildtype. 
+
+#### d) Differential readings on one probe (numeric)
+
+```{r}
+# compute mean expression at each combination of Genetype, BrainRegion and Sex
+pMean <- aggregate(gExp ~ Genotype + BrainRegion + Sex, pDat, FUN = mean)
+
+# display the result in wide form
+x <- xtabs(gExp~BrainRegion+Sex+Genotype,pMean)
+ftable(x)
+```
+
+
+
+### Q2 Examine the sample correlation matrix
+
+#### 
+
 
 ```{r fig.width=7, fig.height=6}
 plot(cars)
