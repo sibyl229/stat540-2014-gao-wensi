@@ -30,6 +30,20 @@ library(gplots)
 ##     lowess
 ```
 
+```r
+library(preprocessCore)
+library(reshape)
+```
+
+```
+## 
+## Attaching package: 'reshape'
+## 
+## The following objects are masked from 'package:plyr':
+## 
+##     rename, round_any
+```
+
 
 
 
@@ -43,6 +57,7 @@ design <- read.table("../data/mouseBrain/GSE7191-design.txt",
                      row.names=1, header=TRUE)
 expDat <- read.table("../data/mouseBrain/GSE7191-data.txt",
                      row.name="probe", header=TRUE)
+design$Sid <- rownames(design)
 
 # order expression data columns (samples) by the rows in the design table
 expDat <- expDat[, row.names(design)]
@@ -62,8 +77,12 @@ newDateRun <- with(design, {
 design$DateRun <- newDateRun
 
 # more informative column names for expDat
-colnames(expDat) <- with(design,
-                       paste(DateRun, Genotype, BrainRegion, Sex, sep="_"))
+colnames(expDat) <- 
+  with(design, paste(DateRun, 
+                     substr(Genotype,1,4), 
+                     substr(BrainRegion,1,4), 
+                     substr(Sex,1,1), Sid,
+                     sep="_"))
 
 # define sample order
 sampleOrd <- with(design, order(DateRun, Genotype, BrainRegion, Sex))
@@ -90,7 +109,7 @@ dim(design)  # [samples, design factors]
 ```
 
 ```
-[1] 50  4
+[1] 50  5
 ```
 
 ```r
@@ -158,7 +177,7 @@ html_print(addmargins(x))
 ```
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
-<!-- Sun Feb 23 10:23:09 2014 -->
+<!-- Sun Feb 23 19:32:51 2014 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH> S1P2_KO </TH> <TH> S1P3_KO </TH> <TH> Wild_type </TH> <TH> Sum </TH>  </TR>
   <TR> <TD align="right"> hippocampus </TD> <TD align="right"> 10 </TD> <TD align="right"> 5 </TD> <TD align="right"> 10 </TD> <TD align="right"> 25 </TD> </TR>
@@ -269,8 +288,6 @@ neocortex   female            6.608   6.398     6.645
 #### a)
 
 
-
-
 ```r
 # creating some color palette
 jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
@@ -281,33 +298,148 @@ jGreysFun <- colorRampPalette(brewer.pal(n = 9, "Greys"))
 
 ```r
 sampleCor <- cor(expDat)
-heatmap.2(sampleCor, 
-          Rowv = FALSE, dendrogram="none",
-          symm=TRUE, margins=c(15,15),
-          trace="none", scale="none", col = jGreysFun(256))
+
+myheatmap <- function(sampleCor, ...){
+  heatmap.2(sampleCor, 
+            Rowv = FALSE, dendrogram="none",
+            symm=TRUE, margins=c(15,15),
+            trace="none", scale="none", col = jGreysFun(256))
+}
+myheatmap(sampleCor)
 ```
 
 ![plot of chunk unnamed-chunk-15](figure/unnamed-chunk-15.png) 
 
 
 
+b) Outlier sample
+
+To show how the outlier stands out visually, I computed the mean correlation for each row. And display the distribution of the means using a density plot.
+
 ```r
-#heatmap(expDat, Rowv = NA, Colv = NA, scale="none", margins = c(5, 8), col = jBuPuFun(256))
-set.seed(540)
-hSize <- 200
-theseProbes <- sample(1:nrow(expDat), hSize)
-hDat <- expDat[theseProbes, sampleOrd]
-hDat <- as.matrix(hDat)
-colnames(hDat) <- with(design[sampleOrd,],
-                       paste(DateRun, Genotype, BrainRegion, Sex, sep="_"))
+meanCor <- rowMeans(sampleCor)
+ggplot(data.frame(meanCor=meanCor),
+       aes(x=meanCor)) +
+  geom_bar(alpha=0.5)
+```
 
-
-jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
-heatmap(hDat, Colv = NA, Rowv = NA, scale=c("column"), 
-        margins = c(5, 8), col = jPurplesFun(256))
+```
+stat_bin: binwidth defaulted to range/30. Use 'binwidth = x' to adjust this.
 ```
 
 ![plot of chunk unnamed-chunk-16](figure/unnamed-chunk-16.png) 
+
+```r
+
+(outlierName <- names(which(meanCor==min(meanCor))))
+```
+
+```
+[1] "Day-6_S1P3_hipp_f_GSM172976"
+```
+
+
+Numerically, I computed the rank sum test to show that the correlation involving outlier sample has a different mean from those not involving the outlier sample. I suppose I have to assume independence between all these correlation coefficeints which obviously isn't true, but maybe I can be sloppy here... 
+
+
+
+
+
+### 3  Normalization 
+
+#### a) Prior to normalization
+
+
+```r
+# elongate <- function(hDat){
+#   sampleName <- factor(colnames(eDat))
+#   ldply(hDat, summarize){
+# #     print(dim(x))
+# #     print(names(x))
+# #     return(data.frame(gExp=x, sampleName=x))
+#   })
+# }
+```
+
+
+
+```r
+set.seed(540)
+hSize <- 2000
+theseProbes <- sample(1:nrow(expDat), hSize)
+expDat2 <- expDat[theseProbes,]
+expDat2 <- expDat
+
+longExpDat <- melt(cbind(expDat2, probe=rownames(expDat2)), 
+                   'probe')
+longExpDat <- rename(longExpDat, 
+                     c("variable"="SampleName", "value"="gExp"))
+
+
+
+p <- ggplot(longExpDat, 
+            aes(SampleName, gExp, color=SampleName==outlierName))
+p + geom_boxplot()
+```
+
+![plot of chunk unnamed-chunk-19](figure/unnamed-chunk-19.png) 
+
+
+
+
+```r
+
+myNormalize <- function(eDat){
+  neDat <- normalize.quantiles(as.matrix(eDat))
+  neDat <- data.frame(neDat)
+  rownames(neDat) <- rownames(eDat)
+  colnames(neDat) <- colnames(eDat) 
+  return(neDat)
+}
+
+nExpDat <- myNormalize(expDat)
+```
+
+
+
+#### b) With normalization alone
+
+```r
+myheatmap(cor(nExpDat))
+```
+
+![plot of chunk unnamed-chunk-21](figure/unnamed-chunk-21.png) 
+
+
+
+#### c) With outlier removed and quantile normalization
+
+```r
+nrExpDat <- expDat[, colnames(expDat) != outlierName]
+nrExpDat <- myNormalize(nrExpDat)
+myheatmap(cor(nrExpDat))
+```
+
+![plot of chunk unnamed-chunk-22](figure/unnamed-chunk-22.png) 
+
+
+
+
+```r
+#heatmap(expDat, Rowv = NA, Colv = NA, scale="none", margins = c(5, 8), col = jBuPuFun(256))
+# set.seed(540)
+# hSize <- 200
+# theseProbes <- sample(1:nrow(expDat), hSize)
+# hDat <- expDat[theseProbes, sampleOrd]
+# hDat <- as.matrix(hDat)
+# colnames(hDat) <- with(design[sampleOrd,],
+#                        paste(DateRun, Genotype, BrainRegion, Sex, sep="_"))
+# 
+# 
+# jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
+# heatmap(hDat, Colv = NA, Rowv = NA, scale=c("column"), 
+#         margins = c(5, 8), col = jPurplesFun(256))
+```
 
 
 
@@ -316,6 +448,6 @@ heatmap(hDat, Colv = NA, Rowv = NA, scale=c("column"),
 plot(cars)
 ```
 
-![plot of chunk unnamed-chunk-17](figure/unnamed-chunk-17.png) 
+![plot of chunk unnamed-chunk-24](figure/unnamed-chunk-24.png) 
 
 

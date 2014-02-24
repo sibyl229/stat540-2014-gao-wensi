@@ -16,6 +16,8 @@ library(ggplot2)
 library(xtable)
 library(RColorBrewer)
 library(gplots)
+library(preprocessCore)
+library(reshape)
 ```
 
 ```{r include = FALSE}
@@ -37,6 +39,7 @@ design <- read.table("../data/mouseBrain/GSE7191-design.txt",
                      row.names=1, header=TRUE)
 expDat <- read.table("../data/mouseBrain/GSE7191-data.txt",
                      row.name="probe", header=TRUE)
+design$Sid <- rownames(design)
 
 # order expression data columns (samples) by the rows in the design table
 expDat <- expDat[, row.names(design)]
@@ -54,8 +57,12 @@ newDateRun <- with(design, {
 design$DateRun <- newDateRun
 
 # more informative column names for expDat
-colnames(expDat) <- with(design,
-                       paste(DateRun, Genotype, BrainRegion, Sex, sep="_"))
+colnames(expDat) <- 
+  with(design, paste(DateRun, 
+                     substr(Genotype,1,4), 
+                     substr(BrainRegion,1,4), 
+                     substr(Sex,1,1), Sid,
+                     sep="_"))
 
 # define sample order
 sampleOrd <- with(design, order(DateRun, Genotype, BrainRegion, Sex))
@@ -161,26 +168,113 @@ jGreysFun <- colorRampPalette(brewer.pal(n = 9, "Greys"))
 
 ```{r fig.width=10, fig.height=10}
 sampleCor <- cor(expDat)
-heatmap.2(sampleCor, 
-          Rowv = FALSE, dendrogram="none",
-          symm=TRUE, margins=c(15,15),
-          trace="none", scale="none", col = jGreysFun(256))
+
+myheatmap <- function(sampleCor, ...){
+  heatmap.2(sampleCor, 
+            Rowv = FALSE, dendrogram="none",
+            symm=TRUE, margins=c(15,15),
+            trace="none", scale="none", col = jGreysFun(256))
+}
+myheatmap(sampleCor)
+```
+
+
+b) Outlier sample
+
+To show how the outlier stands out visually, I computed the mean correlation for each row. And display the distribution of the means using a density plot.
+```{r}
+meanCor <- rowMeans(sampleCor)
+ggplot(data.frame(meanCor=meanCor),
+       aes(x=meanCor)) +
+  geom_bar(alpha=0.5)
+
+(outlierName <- names(which(meanCor==min(meanCor))))
+```
+
+Numerically, I computed the rank sum test to show that the correlation involving outlier sample has a different mean from those not involving the outlier sample. I suppose I have to assume independence between all these correlation coefficeints which obviously isn't true, but maybe I can be sloppy here... 
+```{r}
+```
+
+
+
+### 3  Normalization 
+
+#### a) Prior to normalization
+
+```{r}
+# elongate <- function(hDat){
+#   sampleName <- factor(colnames(eDat))
+#   ldply(hDat, summarize){
+# #     print(dim(x))
+# #     print(names(x))
+# #     return(data.frame(gExp=x, sampleName=x))
+#   })
+# }
 ```
 
 ```{r}
-#heatmap(expDat, Rowv = NA, Colv = NA, scale="none", margins = c(5, 8), col = jBuPuFun(256))
 set.seed(540)
-hSize <- 200
+hSize <- 2000
 theseProbes <- sample(1:nrow(expDat), hSize)
-hDat <- expDat[theseProbes, sampleOrd]
-hDat <- as.matrix(hDat)
-colnames(hDat) <- with(design[sampleOrd,],
-                       paste(DateRun, Genotype, BrainRegion, Sex, sep="_"))
+expDat2 <- expDat[theseProbes,]
+expDat2 <- expDat
+
+longExpDat <- melt(cbind(expDat2, probe=rownames(expDat2)), 
+                   'probe')
+longExpDat <- rename(longExpDat, 
+                     c("variable"="SampleName", "value"="gExp"))
 
 
-jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
-heatmap(hDat, Colv = NA, Rowv = NA, scale=c("column"), 
-        margins = c(5, 8), col = jPurplesFun(256))
+
+p <- ggplot(longExpDat, 
+            aes(SampleName, gExp, color=SampleName==outlierName))
+p + geom_boxplot()
+```
+
+
+```{r}
+
+myNormalize <- function(eDat){
+  neDat <- normalize.quantiles(as.matrix(eDat))
+  neDat <- data.frame(neDat)
+  rownames(neDat) <- rownames(eDat)
+  colnames(neDat) <- colnames(eDat) 
+  return(neDat)
+}
+
+nExpDat <- myNormalize(expDat)
+
+```
+
+
+#### b) With normalization alone
+```{r}
+myheatmap(cor(nExpDat))
+```
+
+
+#### c) With outlier removed and quantile normalization
+```{r}
+nrExpDat <- expDat[, colnames(expDat) != outlierName]
+nrExpDat <- myNormalize(nrExpDat)
+myheatmap(cor(nrExpDat))
+```
+
+
+```{r}
+#heatmap(expDat, Rowv = NA, Colv = NA, scale="none", margins = c(5, 8), col = jBuPuFun(256))
+# set.seed(540)
+# hSize <- 200
+# theseProbes <- sample(1:nrow(expDat), hSize)
+# hDat <- expDat[theseProbes, sampleOrd]
+# hDat <- as.matrix(hDat)
+# colnames(hDat) <- with(design[sampleOrd,],
+#                        paste(DateRun, Genotype, BrainRegion, Sex, sep="_"))
+# 
+# 
+# jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
+# heatmap(hDat, Colv = NA, Rowv = NA, scale=c("column"), 
+#         margins = c(5, 8), col = jPurplesFun(256))
 ```
 
 
