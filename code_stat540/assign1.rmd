@@ -9,7 +9,7 @@ This analysis is based on publicly-available expression study of mouse brain tis
 
 S1P2, when mutated, results in seizures. While mutated S1P3, a related gene, does not. In this study, gene expression of two brain regions (hippocampus and neocortex) from three mouse strains (wild type, S1P2 mutant, and S1P3 mutant) are measured. Additional information of gender of the mice and processing date is available in the data being analyzed.
 
-Expression is measured on the Affymetrix MGU74Av2 platform.
+Expression is measured on the Affymetrix MG_U74Av2 platform.
 ```{r}
 library(plyr)
 library(ggplot2)
@@ -18,6 +18,7 @@ library(RColorBrewer)
 library(gplots)
 library(preprocessCore)
 library(reshape)
+library(limma)
 ```
 
 ```{r include = FALSE}
@@ -43,6 +44,12 @@ design$Sid <- rownames(design)
 
 # order expression data columns (samples) by the rows in the design table
 expDat <- expDat[, row.names(design)]
+```
+
+```{r}
+# Reorder Genotype factor levels so that wildtype has level 1
+design$Genotype <- 
+  factor(design$Genotype, levels=c("Wild_type","S1P2_KO","S1P3_KO"))
 ```
 
 ```{r}
@@ -135,10 +142,22 @@ ftable(x)
 I decided to examining the readings of the probe for S1P2 (S1pr2). The probe for S1P2 is 99372_at on this platform.
 
 ```{r fig.width=10, fig.height=4}
-(theProbe <- which(row.names(expDat) == '99372_at'))
-pDat <- data.frame(design, gExp = unlist(expDat[theProbe, ]))
+extractByProbe <- function(eDat, probeId, eDesign=design){
+  (theProbe <- which(row.names(eDat) == probeId))
+  pDat <- data.frame(eDesign, gExp = unlist(eDat[theProbe, ]))
+  return(pDat)
+}
 
-ggplot(pDat, aes(x=Genotype, y=gExp, color=BrainRegion)) + geom_point(alpha=0.6) + facet_grid(.~Sex)
+plotDiffExp <- function(pDat){
+  p <- ggplot(pDat, aes(x=Genotype, y=gExp, color=Sex)) + 
+      geom_point(alpha=0.6) + 
+      facet_grid(.~BrainRegion)
+  return(p)
+}
+
+pDat <- extractByProbe(expDat, '99372_at')
+plotDiffExp(pDat)
+
 ```
 
 Clearly something isn't right here. The probe reading of S1P2 in the S1P2 knockout group is supposed to decrease, yet the reading is the same or even higher there than that in the wildtype. 
@@ -172,7 +191,7 @@ sampleCor <- cor(expDat)
 myheatmap <- function(sampleCor, ...){
   heatmap.2(sampleCor, 
             Rowv = FALSE, dendrogram="none",
-            symm=TRUE, margins=c(15,15),
+            symm=TRUE, margins=c(10,10),
             trace="none", scale="none", col = jGreysFun(256))
 }
 myheatmap(sampleCor)
@@ -188,7 +207,8 @@ ggplot(data.frame(meanCor=meanCor),
        aes(x=meanCor)) +
   geom_bar(alpha=0.5)
 
-(outlierName <- names(which(meanCor==min(meanCor))))
+outlierIdx <- which(meanCor==min(meanCor))
+(outlierName <- names(outlierIdx))
 ```
 
 Numerically, I computed the rank sum test to show that the correlation involving outlier sample has a different mean from those not involving the outlier sample. I suppose I have to assume independence between all these correlation coefficeints which obviously isn't true, but maybe I can be sloppy here... 
@@ -213,22 +233,31 @@ Numerically, I computed the rank sum test to show that the correlation involving
 ```
 
 ```{r}
-set.seed(540)
-hSize <- 2000
-theseProbes <- sample(1:nrow(expDat), hSize)
-expDat2 <- expDat[theseProbes,]
-expDat2 <- expDat
+# set.seed(540)
+# hSize <- 2000
+# theseProbes <- sample(1:nrow(expDat), hSize)
+# expDat2 <- expDat[theseProbes,]
+# expDat2 <- expDat
 
-longExpDat <- melt(cbind(expDat2, probe=rownames(expDat2)), 
-                   'probe')
-longExpDat <- rename(longExpDat, 
-                     c("variable"="SampleName", "value"="gExp"))
+sampleBoxplot <- function(eDat){
+  
+  # create long format of the expression data, 
+  # better suited for plotting
+  longExpDat <- 
+    melt(cbind(eDat, probe=rownames(eDat)), 'probe')
+  
+  longExpDat <- 
+    rename(longExpDat, 
+           c("variable"="SampleName", "value"="gExp"))
 
-
-
-p <- ggplot(longExpDat, 
+  p <- ggplot(longExpDat, 
             aes(SampleName, gExp, color=SampleName==outlierName))
-p + geom_boxplot()
+  p <- p + geom_boxplot()
+  return(p)
+}
+
+sampleBoxplot(expDat)
+
 ```
 
 
@@ -243,6 +272,7 @@ myNormalize <- function(eDat){
 }
 
 nExpDat <- myNormalize(expDat)
+sampleBoxplot(nExpDat)
 
 ```
 
@@ -253,13 +283,95 @@ myheatmap(cor(nExpDat))
 ```
 
 
-#### c) With outlier removed and quantile normalization
+#### c-e) With outlier removed and quantile normalization
 ```{r}
 nrExpDat <- expDat[, colnames(expDat) != outlierName]
 nrExpDat <- myNormalize(nrExpDat)
+nrDes <- design[-c(outlierIdx),]
 myheatmap(cor(nrExpDat))
+sampleBoxplot(nrExpDat)
 ```
 
+
+```{r}
+plotDiffExp(extractByProbe(nrExpDat, '99372_at', nrDes))
+plotDiffExp(miniDat <- extractByProbe(nrExpDat, '92352_at', nrDes))
+
+```
+### 4 Differential expression across genotypes (within neocortex brain region)
+
+a)
+
+```{r}
+isNc <- nrDes$BrainRegion == "neocortex"
+ncDes <- subset(design, subset=isNc)
+ncDat <- subset(nrExpDat, select=isNc )
+```
+
+```{r}
+ncDesMat <- model.matrix(~Genotype, ncDes)
+ncFit <- lmFit(ncDat, ncDesMat)
+ncEbFit <- eBayes(ncFit)
+koHits <- topTable(ncEbFit, number=50,
+                   coef = grep("KO", colnames(coef(ncEbFit))))
+```
+
+#### b)
+```{r}
+hitsExp <- ncDat[rownames(koHits), order(ncDes$Genotype)]
+heatmap.2(as.matrix(hitsExp), 
+          Colv = NA, Rowv = NA, scale="none", trace="none",
+          margins = c(12, 10), col = jGreysFun(256))
+```
+
+#### c)
+```{r}
+threshold <- 1e-4
+cnt <- sum(koHits$P.Value < threshold)
+```
+The number of hits with p-value smaller than `r threshold` is cnt.
+
+Computing FDR using q-value (adj.P.Val)
+```{r}
+q <- tail(koHits, n=1)$adj.P.Val # FDR of hits
+eFP <- nrow(koHits) * q # expected # FD
+# P <- nrow(koHits)
+# FDR <- eFP / P
+```
+
+d)
+```{r}
+interesting <- rownames(head(koHits,3))
+for (pb in interesting){
+  print(plotDiffExp(extractByProbe(nrExpDat, pb, nrDes)))
+}
+```
+
+```{r}
+set.seed(540)
+boringIdx <- sample(which(rownames(ncDat) %in% rownames(koHits)),3)
+boring <- rownames(ncDat)[boringIdx]
+for (pb in boring){
+  print(plotDiffExp(extractByProbe(nrExpDat, pb, nrDes)))
+}
+```
+e)
+```{r}
+s1p3KOHits <- topTable(ncEbFit, p.value=0.1, number=Inf,
+                   coef = grep("S1P3_KO", colnames(coef(ncEbFit))))
+nrow(s1p3KOHits)
+```
+
+
+```{r}
+#aFit <- lm(gExp ~ Genotype, miniDat, subset=(BrainRegion=="neocortex"))
+# lmFit <- adply(head(nrExpDat), 1, function(x, eDesign){
+#   rowname(x)
+#   pDat <- data.frame(eDesign, gExp = unlist(x))
+#   fit <- lm(gExp ~ Genotype, pDat, subset=(BrainRegion=="neocortex"))
+#   return(pDat)
+# }
+```
 
 ```{r}
 #heatmap(expDat, Rowv = NA, Colv = NA, scale="none", margins = c(5, 8), col = jBuPuFun(256))
@@ -278,7 +390,4 @@ myheatmap(cor(nrExpDat))
 ```
 
 
-```{r fig.width=7, fig.height=6}
-plot(cars)
-```
 

@@ -9,7 +9,7 @@ This analysis is based on publicly-available expression study of mouse brain tis
 
 S1P2, when mutated, results in seizures. While mutated S1P3, a related gene, does not. In this study, gene expression of two brain regions (hippocampus and neocortex) from three mouse strains (wild type, S1P2 mutant, and S1P3 mutant) are measured. Additional information of gender of the mice and processing date is available in the data being analyzed.
 
-Expression is measured on the Affymetrix MGU74Av2 platform.
+Expression is measured on the Affymetrix MG_U74Av2 platform.
 
 ```r
 library(plyr)
@@ -44,6 +44,10 @@ library(reshape)
 ##     rename, round_any
 ```
 
+```r
+library(limma)
+```
+
 
 
 
@@ -61,6 +65,14 @@ design$Sid <- rownames(design)
 
 # order expression data columns (samples) by the rows in the design table
 expDat <- expDat[, row.names(design)]
+```
+
+
+
+```r
+# Reorder Genotype factor levels so that wildtype has level 1
+design$Genotype <- 
+  factor(design$Genotype, levels=c("Wild_type","S1P2_KO","S1P3_KO"))
 ```
 
 
@@ -129,8 +141,8 @@ with(design, table(Genotype))
 
 ```
 Genotype
-  S1P2_KO   S1P3_KO Wild_type 
-       20        10        20 
+Wild_type   S1P2_KO   S1P3_KO 
+       20        20        10 
 ```
 
 ```r
@@ -177,12 +189,12 @@ html_print(addmargins(x))
 ```
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
-<!-- Sun Feb 23 19:32:51 2014 -->
+<!-- Wed Feb 26 05:14:12 2014 -->
 <TABLE border=1>
-<TR> <TH>  </TH> <TH> S1P2_KO </TH> <TH> S1P3_KO </TH> <TH> Wild_type </TH> <TH> Sum </TH>  </TR>
-  <TR> <TD align="right"> hippocampus </TD> <TD align="right"> 10 </TD> <TD align="right"> 5 </TD> <TD align="right"> 10 </TD> <TD align="right"> 25 </TD> </TR>
-  <TR> <TD align="right"> neocortex </TD> <TD align="right"> 10 </TD> <TD align="right"> 5 </TD> <TD align="right"> 10 </TD> <TD align="right"> 25 </TD> </TR>
-  <TR> <TD align="right"> Sum </TD> <TD align="right"> 20 </TD> <TD align="right"> 10 </TD> <TD align="right"> 20 </TD> <TD align="right"> 50 </TD> </TR>
+<TR> <TH>  </TH> <TH> Wild_type </TH> <TH> S1P2_KO </TH> <TH> S1P3_KO </TH> <TH> Sum </TH>  </TR>
+  <TR> <TD align="right"> hippocampus </TD> <TD align="right"> 10 </TD> <TD align="right"> 10 </TD> <TD align="right"> 5 </TD> <TD align="right"> 25 </TD> </TR>
+  <TR> <TD align="right"> neocortex </TD> <TD align="right"> 10 </TD> <TD align="right"> 10 </TD> <TD align="right"> 5 </TD> <TD align="right"> 25 </TD> </TR>
+  <TR> <TD align="right"> Sum </TD> <TD align="right"> 20 </TD> <TD align="right"> 20 </TD> <TD align="right"> 10 </TD> <TD align="right"> 50 </TD> </TR>
    </TABLE>
 
 
@@ -194,12 +206,12 @@ ftable(x)
 ```
 
 ```
-                   Genotype S1P2_KO S1P3_KO Wild_type
+                   Genotype Wild_type S1P2_KO S1P3_KO
 Sex    BrainRegion                                   
-female hippocampus                5       3         5
-       neocortex                  5       3         5
-male   hippocampus                5       2         5
-       neocortex                  5       2         5
+female hippocampus                  5       5       3
+       neocortex                    5       5       3
+male   hippocampus                  5       5       2
+       neocortex                    5       5       2
 ```
 
 
@@ -215,9 +227,9 @@ ftable(x)
 ```
           DateRun Day-1 Day-2 Day-3 Day-4 Day-5 Day-6 Day-7 Day-8
 Genotype                                                         
+Wild_type             4     8     7     0     1     0     0     0
 S1P2_KO               4     0     0     7     1     0     4     4
 S1P3_KO               0     0     0     0     3     7     0     0
-Wild_type             4     8     7     0     1     0     0     0
 ```
 
 ```r
@@ -228,9 +240,9 @@ ftable(x)
 ```
           DateRun Day-1 Day-2 Day-3 Day-4 Day-5 Day-6 Day-7 Day-8
 Genotype                                                         
+Wild_type             4     8     7     0     1     0     0     0
 S1P2_KO               4     0     0     7     1     0     4     4
 S1P3_KO               0     0     0     0     3     7     0     0
-Wild_type             4     8     7     0     1     0     0     0
 ```
 
 
@@ -241,20 +253,24 @@ I decided to examining the readings of the probe for S1P2 (S1pr2). The probe for
 
 
 ```r
-(theProbe <- which(row.names(expDat) == '99372_at'))
+extractByProbe <- function(eDat, probeId, eDesign=design){
+  (theProbe <- which(row.names(eDat) == probeId))
+  pDat <- data.frame(eDesign, gExp = unlist(eDat[theProbe, ]))
+  return(pDat)
+}
+
+plotDiffExp <- function(pDat){
+  p <- ggplot(pDat, aes(x=Genotype, y=gExp, color=Sex)) + 
+      geom_point(alpha=0.6) + 
+      facet_grid(.~BrainRegion)
+  return(p)
+}
+
+pDat <- extractByProbe(expDat, '99372_at')
+plotDiffExp(pDat)
 ```
 
-```
-[1] 11958
-```
-
-```r
-pDat <- data.frame(design, gExp = unlist(expDat[theProbe, ]))
-
-ggplot(pDat, aes(x=Genotype, y=gExp, color=BrainRegion)) + geom_point(alpha=0.6) + facet_grid(.~Sex)
-```
-
-![plot of chunk unnamed-chunk-12](figure/unnamed-chunk-12.png) 
+![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13.png) 
 
 
 Clearly something isn't right here. The probe reading of S1P2 in the S1P2 knockout group is supposed to decrease, yet the reading is the same or even higher there than that in the wildtype. 
@@ -272,12 +288,12 @@ ftable(x)
 ```
 
 ```
-                   Genotype S1P2_KO S1P3_KO Wild_type
+                   Genotype Wild_type S1P2_KO S1P3_KO
 BrainRegion Sex                                      
-hippocampus female            6.724   6.445     6.623
-            male              6.491   6.676     6.539
-neocortex   female            6.608   6.398     6.645
-            male              6.518   6.851     6.587
+hippocampus female              6.623   6.724   6.445
+            male                6.539   6.491   6.676
+neocortex   female              6.645   6.608   6.398
+            male                6.587   6.518   6.851
 ```
 
 
@@ -302,13 +318,13 @@ sampleCor <- cor(expDat)
 myheatmap <- function(sampleCor, ...){
   heatmap.2(sampleCor, 
             Rowv = FALSE, dendrogram="none",
-            symm=TRUE, margins=c(15,15),
+            symm=TRUE, margins=c(10,10),
             trace="none", scale="none", col = jGreysFun(256))
 }
 myheatmap(sampleCor)
 ```
 
-![plot of chunk unnamed-chunk-15](figure/unnamed-chunk-15.png) 
+![plot of chunk unnamed-chunk-16](figure/unnamed-chunk-16.png) 
 
 
 
@@ -327,11 +343,12 @@ ggplot(data.frame(meanCor=meanCor),
 stat_bin: binwidth defaulted to range/30. Use 'binwidth = x' to adjust this.
 ```
 
-![plot of chunk unnamed-chunk-16](figure/unnamed-chunk-16.png) 
+![plot of chunk unnamed-chunk-17](figure/unnamed-chunk-17.png) 
 
 ```r
 
-(outlierName <- names(which(meanCor==min(meanCor))))
+outlierIdx <- which(meanCor==min(meanCor))
+(outlierName <- names(outlierIdx))
 ```
 
 ```
@@ -364,25 +381,33 @@ Numerically, I computed the rank sum test to show that the correlation involving
 
 
 ```r
-set.seed(540)
-hSize <- 2000
-theseProbes <- sample(1:nrow(expDat), hSize)
-expDat2 <- expDat[theseProbes,]
-expDat2 <- expDat
+# set.seed(540)
+# hSize <- 2000
+# theseProbes <- sample(1:nrow(expDat), hSize)
+# expDat2 <- expDat[theseProbes,]
+# expDat2 <- expDat
 
-longExpDat <- melt(cbind(expDat2, probe=rownames(expDat2)), 
-                   'probe')
-longExpDat <- rename(longExpDat, 
-                     c("variable"="SampleName", "value"="gExp"))
+sampleBoxplot <- function(eDat){
+  
+  # create long format of the expression data, 
+  # better suited for plotting
+  longExpDat <- 
+    melt(cbind(eDat, probe=rownames(eDat)), 'probe')
+  
+  longExpDat <- 
+    rename(longExpDat, 
+           c("variable"="SampleName", "value"="gExp"))
 
-
-
-p <- ggplot(longExpDat, 
+  p <- ggplot(longExpDat, 
             aes(SampleName, gExp, color=SampleName==outlierName))
-p + geom_boxplot()
+  p <- p + geom_boxplot()
+  return(p)
+}
+
+sampleBoxplot(expDat)
 ```
 
-![plot of chunk unnamed-chunk-19](figure/unnamed-chunk-19.png) 
+![plot of chunk unnamed-chunk-20](figure/unnamed-chunk-20.png) 
 
 
 
@@ -398,7 +423,10 @@ myNormalize <- function(eDat){
 }
 
 nExpDat <- myNormalize(expDat)
+sampleBoxplot(nExpDat)
 ```
+
+![plot of chunk unnamed-chunk-21](figure/unnamed-chunk-21.png) 
 
 
 
@@ -408,20 +436,148 @@ nExpDat <- myNormalize(expDat)
 myheatmap(cor(nExpDat))
 ```
 
-![plot of chunk unnamed-chunk-21](figure/unnamed-chunk-21.png) 
+![plot of chunk unnamed-chunk-22](figure/unnamed-chunk-22.png) 
 
 
 
-#### c) With outlier removed and quantile normalization
+#### c-e) With outlier removed and quantile normalization
 
 ```r
 nrExpDat <- expDat[, colnames(expDat) != outlierName]
 nrExpDat <- myNormalize(nrExpDat)
+nrDes <- design[-c(outlierIdx),]
 myheatmap(cor(nrExpDat))
 ```
 
-![plot of chunk unnamed-chunk-22](figure/unnamed-chunk-22.png) 
+![plot of chunk unnamed-chunk-23](figure/unnamed-chunk-231.png) 
 
+```r
+sampleBoxplot(nrExpDat)
+```
+
+![plot of chunk unnamed-chunk-23](figure/unnamed-chunk-232.png) 
+
+
+
+
+```r
+plotDiffExp(extractByProbe(nrExpDat, '99372_at', nrDes))
+```
+
+![plot of chunk unnamed-chunk-24](figure/unnamed-chunk-241.png) 
+
+```r
+plotDiffExp(miniDat <- extractByProbe(nrExpDat, '92352_at', nrDes))
+```
+
+![plot of chunk unnamed-chunk-24](figure/unnamed-chunk-242.png) 
+
+### 4 Differential expression across genotypes (within neocortex brain region)
+
+a)
+
+
+```r
+isNc <- nrDes$BrainRegion == "neocortex"
+ncDes <- subset(design, subset=isNc)
+ncDat <- subset(nrExpDat, select=isNc )
+```
+
+
+
+```r
+ncDesMat <- model.matrix(~Genotype, ncDes)
+ncFit <- lmFit(ncDat, ncDesMat)
+ncEbFit <- eBayes(ncFit)
+koHits <- topTable(ncEbFit, number=50,
+                   coef = grep("KO", colnames(coef(ncEbFit))))
+```
+
+
+#### b)
+
+```r
+hitsExp <- ncDat[rownames(koHits), order(ncDes$Genotype)]
+heatmap.2(as.matrix(hitsExp), 
+          Colv = NA, Rowv = NA, scale="none", trace="none",
+          margins = c(12, 10), col = jGreysFun(256))
+```
+
+```
+Warning: Discrepancy: Rowv is FALSE, while dendrogram is `both'. Omitting row dendogram.
+Warning: Discrepancy: Colv is FALSE, while dendrogram is `none'. Omitting column dendogram.
+```
+
+![plot of chunk unnamed-chunk-27](figure/unnamed-chunk-27.png) 
+
+
+#### c)
+
+```r
+threshold <- 1e-4
+cnt <- sum(koHits$P.Value < threshold)
+```
+
+The number of hits with p-value smaller than 10<sup>-4</sup> is cnt.
+
+Computing FDR using q-value (adj.P.Val)
+
+```r
+q <- tail(koHits, n=1)$adj.P.Val # FDR of hits
+eFP <- nrow(koHits) * q # expected # FD
+# P <- nrow(koHits)
+# FDR <- eFP / P
+```
+
+
+d)
+
+```r
+interesting <- rownames(head(koHits,3))
+for (pb in interesting){
+  print(plotDiffExp(extractByProbe(nrExpDat, pb, nrDes)))
+}
+```
+
+![plot of chunk unnamed-chunk-30](figure/unnamed-chunk-301.png) ![plot of chunk unnamed-chunk-30](figure/unnamed-chunk-302.png) ![plot of chunk unnamed-chunk-30](figure/unnamed-chunk-303.png) 
+
+
+
+```r
+set.seed(540)
+boringIdx <- sample(which(rownames(ncDat) %in% rownames(koHits)),3)
+boring <- rownames(ncDat)[boringIdx]
+for (pb in boring){
+  print(plotDiffExp(extractByProbe(nrExpDat, pb, nrDes)))
+}
+```
+
+![plot of chunk unnamed-chunk-31](figure/unnamed-chunk-311.png) ![plot of chunk unnamed-chunk-31](figure/unnamed-chunk-312.png) ![plot of chunk unnamed-chunk-31](figure/unnamed-chunk-313.png) 
+
+e)
+
+```r
+s1p3KOHits <- topTable(ncEbFit, p.value=0.1, number=Inf,
+                   coef = grep("S1P3_KO", colnames(coef(ncEbFit))))
+nrow(s1p3KOHits)
+```
+
+```
+[1] 61
+```
+
+
+
+
+```r
+#aFit <- lm(gExp ~ Genotype, miniDat, subset=(BrainRegion=="neocortex"))
+# lmFit <- adply(head(nrExpDat), 1, function(x, eDesign){
+#   rowname(x)
+#   pDat <- data.frame(eDesign, gExp = unlist(x))
+#   fit <- lm(gExp ~ Genotype, pDat, subset=(BrainRegion=="neocortex"))
+#   return(pDat)
+# }
+```
 
 
 
@@ -442,12 +598,5 @@ myheatmap(cor(nrExpDat))
 ```
 
 
-
-
-```r
-plot(cars)
-```
-
-![plot of chunk unnamed-chunk-24](figure/unnamed-chunk-24.png) 
 
 
