@@ -304,15 +304,15 @@ a)
 
 ```{r}
 isNc <- nrDes$BrainRegion == "neocortex"
-ncDes <- subset(design, subset=isNc)
-ncDat <- subset(nrExpDat, select=isNc )
+ncDes <- subset(nrDes, subset=isNc)
+ncDat <- subset(nrExpDat, select=isNc)
 ```
 
 ```{r}
 ncDesMat <- model.matrix(~Genotype, ncDes)
 ncFit <- lmFit(ncDat, ncDesMat)
 ncEbFit <- eBayes(ncFit)
-koHits <- topTable(ncEbFit, number=50,
+koHits <- topTable(ncEbFit, number=50, adjust.method="BH",
                    coef = grep("KO", colnames(coef(ncEbFit))))
 ```
 
@@ -326,10 +326,13 @@ heatmap.2(as.matrix(hitsExp),
 
 #### c)
 ```{r}
-threshold <- 1e-4
-cnt <- sum(koHits$P.Value < threshold)
+pMax <- 1e-3
+unadjTop <- topTable(ncEbFit, number=Inf, 
+                     adjust.method="none", p.value=pMax,
+                     coef = grep("KO", colnames(coef(ncEbFit))))
 ```
-The number of hits with p-value smaller than `r threshold` is cnt.
+The number of hits with p-value smaller than `r threshold` is 
+`r nrow(unadjTop)`.
 
 Computing FDR using q-value (adj.P.Val)
 ```{r}
@@ -355,12 +358,68 @@ for (pb in boring){
   print(plotDiffExp(extractByProbe(nrExpDat, pb, nrDes)))
 }
 ```
-e)
+e) 
 ```{r}
-s1p3KOHits <- topTable(ncEbFit, p.value=0.1, number=Inf,
-                   coef = grep("S1P3_KO", colnames(coef(ncEbFit))))
+s1p3KOHits <- topTable(ncEbFit, number=Inf,
+                       adjust.method="BH", p.value=0.1,
+                       coef = grep("S1P3_KO", colnames(coef(ncEbFit))))
 nrow(s1p3KOHits)
 ```
+
+
+Q5 (5 points) Differential expression analysis for Genotype * BrainRegion.
+
+You should be using data with the worst outlier removed, after quantile normalization and for both brain regions.
+
+Q5a: Fit a 3x2 full factorial model.
+
+Test for any effect of Genotype and/or BrainRegion, i.e. test your model against a model with just an intercept. How many probes have a BH-adjusted p-value, a.k.a. q-value, less than 1e-3?
+
+
+```{r}
+desMat <- model.matrix(~Genotype*BrainRegion, nrDes)
+fit <- lmFit(nrExpDat, desMat)
+ebFit <- eBayes(fit)
+hits <- topTable(ebFit, number=Inf, adjust.method="BH", p.value=1e-3,
+                   coef = colnames(coef(ebFit))[-1])
+nrow(hits)
+```
+
+
+Q5b: Test the null hypothesis that BrainRegion doesn't matter, i.e. that all terms involving BrainRegion are zero.
+How many probes have a BH-adjusted p-value less than 0.1?
+
+```{r}
+hitsBrn <- topTable(ebFit, number=Inf, adjust.method="BH", p.value=1e-3,
+  coef = grep("BrainRegion", colnames(coef(ebFit))))
+nrow(hitsBrn)
+```
+
+Q5c: Highlight some probes where BrainRegion does and does not matter.
+
+Using the results from Q5b, plot and describe some results for a couple of hits and non-hits.
+
+```{r}
+interestBrn <- rownames(head(hitsBrn,3))
+for (pb in interestBrn){
+  print(plotDiffExp(extractByProbe(nrExpDat, pb, nrDes)))
+}
+```
+
+```{r}
+set.seed(540)
+boringIdx <- sample(which(rownames(ncDat) %in% rownames(koHits)),3)
+boring <- rownames(ncDat)[boringIdx]
+for (pb in boring){
+  print(plotDiffExp(extractByProbe(nrExpDat, pb, nrDes)))
+}
+```
+
+
+
+Q5d: Test the null hypothesis that Genotype doesn't matter, i.e. that all terms involving Genotype are zero.
+
+How many probes have a BH-adjusted p-value less than 0.1? Compare these results to those obtained for BrainRegion in Q5b, either based on this count or based on all the p-values. What do you conclude about the relative magnitude of the influence of brain region vs. genotype on gene expression?
 
 
 ```{r}
