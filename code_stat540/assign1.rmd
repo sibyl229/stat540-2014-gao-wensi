@@ -13,12 +13,14 @@ Expression is measured on the Affymetrix MG_U74Av2 platform.
 ```{r}
 library(plyr)
 library(ggplot2)
+library(lattice)
 library(xtable)
 library(RColorBrewer)
-library(gplots)
-library(preprocessCore)
-library(reshape)
+library(gplots, warn.conflicts = FALSE)
+library(preprocessCore)  # to help normalization
+library(reshape, warn.conflicts = FALSE)
 library(limma)
+library(MIfuns, warn.conflicts = FALSE) # to help print ftable
 ```
 
 ```{r include = FALSE}
@@ -30,6 +32,9 @@ opts_chunk$set(tidy = FALSE,
 
 ```{r include = FALSE}
 html_print <- function(x, ..., digits = 0, include.rownames = TRUE){
+  if (any(class(x) == "ftable")){
+    x <- ftable2data.frame(x)
+  }
   print(xtable(x, digits = digits, ...), 
         type = 'html', include.rownames = include.rownames)
 }
@@ -56,8 +61,12 @@ design$Genotype <-
 # create new factor for DateRun
 # levels are order by increasing date, and labeled by "Day-1", etc
 newDateRun <- with(design, {
-  dates <- as.Date(levels(design$DateRun),"%m/%d/%y")
-  nfDateRun <- factor(DateRun, levels(DateRun)[order(dates)])
+  ## Reorder DateRun levels
+  dates <- as.Date(levels(DateRun),"%m/%d/%y")
+  newDateLevels <- levels(DateRun)[order(dates)]
+  nfDateRun <- factor(DateRun, newDateLevels)
+  
+  ## Re-label DateRun level labels
   levels(nfDateRun) <- paste("Day", 1:nlevels(DateRun), sep="-") 
   return(nfDateRun)
 })
@@ -121,19 +130,18 @@ html_print(addmargins(x))
 ```
 
 Even as the gender of the mouse is taken into account. The design seem okay:
-```{r}
+
+```{r results='asis'}
 x <- with(design, table(Sex, BrainRegion, Genotype))
-ftable(x)
+html_print(ftable(x))
 ```
 
 
 Problem seem to appear when examining DateRun as a factor. DateRun could potentially confound both Genotype and gender of the mouse. It is often the case that a single day contains only samples of the same genotype and samples of the same gender. As a result, one may not know if different expression readings is due to different genotypes, or different dates the sample is run. It's the same case with gender of the mouse. If DateRun (the batch effect) is an important factor of the expression readings, one has to correct for this effect. 
 
-```{r}
+```{r results='asis'}
 x <- with(design, table(Genotype, DateRun))
-ftable(x)
-x <- with(design, table(Genotype, DateRun))
-ftable(x)
+html_print(ftable(x))
 ```
 
 
@@ -149,14 +157,16 @@ extractByProbe <- function(eDat, probeId, eDesign=design){
 }
 
 plotDiffExp <- function(pDat){
-  p <- ggplot(pDat, aes(x=Genotype, y=gExp, color=Sex)) + 
-      geom_point(alpha=0.6) + 
-      facet_grid(.~BrainRegion)
+  p <- ggplot(pDat, 
+              aes(x=Genotype, y=gExp, 
+                  group=BrainRegion, color=BrainRegion, shape=Sex)) + 
+      geom_point(alpha=0.6, size=3) + 
+      geom_smooth(se=F)
   return(p)
 }
 
 pDat <- extractByProbe(expDat, '99372_at')
-plotDiffExp(pDat)
+plotDiffExp(pDat) + facet_grid(.~Sex)
 
 ```
 
@@ -173,8 +183,6 @@ x <- xtabs(gExp~BrainRegion+Sex+Genotype,pMean)
 ftable(x)
 ```
 
-
-
 ### Q2 Examine the sample correlation matrix
 
 #### a)
@@ -185,11 +193,12 @@ jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
 jGreysFun <- colorRampPalette(brewer.pal(n = 9, "Greys"))
 ```
 
-```{r fig.width=10, fig.height=10}
+```{r}
+#fig.width=10, fig.height=10}
 sampleCor <- cor(expDat)
 
-myheatmap <- function(sampleCor, ...){
-  heatmap.2(sampleCor, 
+myheatmap <- function(sampCor, ...){
+  heatmap.2(sampCor, 
             Rowv = FALSE, dendrogram="none",
             symm=TRUE, margins=c(10,10),
             trace="none", scale="none", col = jGreysFun(256))
@@ -216,6 +225,35 @@ Numerically, I computed the rank sum test to show that the correlation involving
 ```
 
 
+#### Q2c: Examine the outlier in the context of its experimental group.
+
+Which group is the outlier in, in terms of Genotype, BrainRegion, and Sex? 
+
+```{r}
+
+group.def <- c("Genotype", "BrainRegion", "Sex")
+thisGroup <- design[outlierIdx,]
+```
+
+```{r}
+isSameGroup <- function(x, y, group.def=TRUE){
+  return(all(x[group.def] == y[group.def]))
+}
+members <- alply(design, 1, isSameGroup,
+                   y=design[outlierIdx,], group.def=group.def)
+members <- unlist(members)
+colnames(expDat)[members]
+```
+
+Scatter plot these samples against each other and comment on the plot. Try to address overplotting! Hint: `splom()` from `lattice` is helpful.
+
+```{r}
+sampLabels <- design$Sid
+sampLabels[outlierIdx] <- "Outlier"
+grpSampCor <- expDat[, members]
+colnames(grpSampCor) <- sampLabels[members]
+splom(grpSampCor, panel = panel.smoothScatter)
+```
 
 ### 3  Normalization 
 
@@ -295,7 +333,7 @@ sampleBoxplot(nrExpDat)
 
 ```{r}
 plotDiffExp(extractByProbe(nrExpDat, '99372_at', nrDes))
-plotDiffExp(miniDat <- extractByProbe(nrExpDat, '92352_at', nrDes))
+#plotDiffExp(miniDat <- extractByProbe(nrExpDat, '92352_at', nrDes))
 
 ```
 ### 4 Differential expression across genotypes (within neocortex brain region)
@@ -316,6 +354,7 @@ koHits <- topTable(ncEbFit, number=50, adjust.method="BH",
                    coef = grep("KO", colnames(coef(ncEbFit))))
 ```
 
+
 #### b)
 ```{r}
 hitsExp <- ncDat[rownames(koHits), order(ncDes$Genotype)]
@@ -331,7 +370,7 @@ unadjTop <- topTable(ncEbFit, number=Inf,
                      adjust.method="none", p.value=pMax,
                      coef = grep("KO", colnames(coef(ncEbFit))))
 ```
-The number of hits with p-value smaller than `r threshold` is 
+The number of hits with p-value smaller than `r pMax` is 
 `r nrow(unadjTop)`.
 
 Computing FDR using q-value (adj.P.Val)
@@ -344,20 +383,29 @@ eFP <- nrow(koHits) * q # expected # FD
 
 d)
 ```{r}
-interesting <- rownames(head(koHits,3))
-for (pb in interesting){
-  print(plotDiffExp(extractByProbe(nrExpDat, pb, nrDes)))
-}
+intrProbes <- rownames(head(koHits,3))
+intDat <- ldply(intrProbes, function(probe){
+  data <- extractByProbe(ncDat, probe, nrDes)
+  data$status <- rep("Interesting", nrow(data))
+  return(data)
+})
+set.seed(540)
+boringIdx <- sample(which(rownames(ncDat) %in% rownames(unadjTop)),3)
+borProbes <- rownames(ncDat)[boringIdx]
+
 ```
 
 ```{r}
-set.seed(540)
-boringIdx <- sample(which(rownames(ncDat) %in% rownames(koHits)),3)
-boring <- rownames(ncDat)[boringIdx]
+
+
+for (pb in interesting){
+  print(plotDiffExp(extractByProbe(ncDat, pb, nrDes)))
+}
 for (pb in boring){
   print(plotDiffExp(extractByProbe(nrExpDat, pb, nrDes)))
 }
 ```
+
 e) 
 ```{r}
 s1p3KOHits <- topTable(ncEbFit, number=Inf,
@@ -390,7 +438,7 @@ Q5b: Test the null hypothesis that BrainRegion doesn't matter, i.e. that all ter
 How many probes have a BH-adjusted p-value less than 0.1?
 
 ```{r}
-hitsBrn <- topTable(ebFit, number=Inf, adjust.method="BH", p.value=1e-3,
+hitsBrn <- topTable(ebFit, number=Inf, adjust.method="BH", p.value=0.1,
   coef = grep("BrainRegion", colnames(coef(ebFit))))
 nrow(hitsBrn)
 ```
@@ -421,6 +469,12 @@ Q5d: Test the null hypothesis that Genotype doesn't matter, i.e. that all terms 
 
 How many probes have a BH-adjusted p-value less than 0.1? Compare these results to those obtained for BrainRegion in Q5b, either based on this count or based on all the p-values. What do you conclude about the relative magnitude of the influence of brain region vs. genotype on gene expression?
 
+```{r}
+hitsGn <- topTable(ebFit, number=Inf, adjust.method="BH", p.value=0.1,
+  coef = grep("Genotype", colnames(coef(ebFit))))
+nrow(hitsGn)
+```
+
 
 ```{r}
 #aFit <- lm(gExp ~ Genotype, miniDat, subset=(BrainRegion=="neocortex"))
@@ -447,6 +501,4 @@ How many probes have a BH-adjusted p-value less than 0.1? Compare these results 
 # heatmap(hDat, Colv = NA, Rowv = NA, scale=c("column"), 
 #         margins = c(5, 8), col = jPurplesFun(256))
 ```
-
-
 

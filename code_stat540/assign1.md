@@ -14,38 +14,32 @@ Expression is measured on the Affymetrix MG_U74Av2 platform.
 ```r
 library(plyr)
 library(ggplot2)
+library(lattice)
 library(xtable)
 library(RColorBrewer)
-library(gplots)
+library(gplots, warn.conflicts = FALSE)
 ```
 
 ```
 ## KernSmooth 2.23 loaded
 ## Copyright M. P. Wand 1997-2009
-## 
-## Attaching package: 'gplots'
-## 
-## The following object is masked from 'package:stats':
-## 
-##     lowess
 ```
 
 ```r
-library(preprocessCore)
-library(reshape)
-```
-
-```
-## 
-## Attaching package: 'reshape'
-## 
-## The following objects are masked from 'package:plyr':
-## 
-##     rename, round_any
-```
-
-```r
+library(preprocessCore)  # to help normalization
+library(reshape, warn.conflicts = FALSE)
 library(limma)
+library(MIfuns, warn.conflicts = FALSE)  # to help print ftable
+```
+
+```
+## Loading required package: grid
+## Loading required package: XML
+## Loading required package: MASS
+```
+
+```
+## MIfuns 5.1
 ```
 
 
@@ -81,8 +75,12 @@ design$Genotype <-
 # create new factor for DateRun
 # levels are order by increasing date, and labeled by "Day-1", etc
 newDateRun <- with(design, {
-  dates <- as.Date(levels(design$DateRun),"%m/%d/%y")
-  nfDateRun <- factor(DateRun, levels(DateRun)[order(dates)])
+  ## Reorder DateRun levels
+  dates <- as.Date(levels(DateRun),"%m/%d/%y")
+  newDateLevels <- levels(DateRun)[order(dates)]
+  nfDateRun <- factor(DateRun, newDateLevels)
+  
+  ## Re-label DateRun level labels
   levels(nfDateRun) <- paste("Day", 1:nlevels(DateRun), sep="-") 
   return(nfDateRun)
 })
@@ -189,7 +187,7 @@ html_print(addmargins(x))
 ```
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
-<!-- Wed Feb 26 05:14:12 2014 -->
+<!-- Thu Feb 27 22:52:27 2014 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH> Wild_type </TH> <TH> S1P2_KO </TH> <TH> S1P3_KO </TH> <TH> Sum </TH>  </TR>
   <TR> <TD align="right"> hippocampus </TD> <TD align="right"> 10 </TD> <TD align="right"> 10 </TD> <TD align="right"> 5 </TD> <TD align="right"> 25 </TD> </TR>
@@ -200,19 +198,22 @@ html_print(addmargins(x))
 
 Even as the gender of the mouse is taken into account. The design seem okay:
 
+
 ```r
 x <- with(design, table(Sex, BrainRegion, Genotype))
-ftable(x)
+html_print(ftable(x))
 ```
 
-```
-                   Genotype Wild_type S1P2_KO S1P3_KO
-Sex    BrainRegion                                   
-female hippocampus                  5       5       3
-       neocortex                    5       5       3
-male   hippocampus                  5       5       2
-       neocortex                    5       5       2
-```
+<!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
+<!-- Thu Feb 27 22:52:27 2014 -->
+<TABLE border=1>
+<TR> <TH>  </TH> <TH>        </TH> <TH>             </TH> <TH> Genotype </TH> <TH> Wild_type </TH> <TH> S1P2_KO </TH> <TH> S1P3_KO </TH>  </TR>
+  <TR> <TD align="right"> 1 </TD> <TD> Sex    </TD> <TD> BrainRegion </TD> <TD>          </TD> <TD>           </TD> <TD>         </TD> <TD>         </TD> </TR>
+  <TR> <TD align="right"> 2 </TD> <TD> female </TD> <TD> hippocampus </TD> <TD>          </TD> <TD>         5 </TD> <TD>       5 </TD> <TD>       3 </TD> </TR>
+  <TR> <TD align="right"> 3 </TD> <TD>        </TD> <TD> neocortex   </TD> <TD>          </TD> <TD>         5 </TD> <TD>       5 </TD> <TD>       3 </TD> </TR>
+  <TR> <TD align="right"> 4 </TD> <TD> male   </TD> <TD> hippocampus </TD> <TD>          </TD> <TD>         5 </TD> <TD>       5 </TD> <TD>       2 </TD> </TR>
+  <TR> <TD align="right"> 5 </TD> <TD>        </TD> <TD> neocortex   </TD> <TD>          </TD> <TD>         5 </TD> <TD>       5 </TD> <TD>       2 </TD> </TR>
+   </TABLE>
 
 
 
@@ -221,29 +222,18 @@ Problem seem to appear when examining DateRun as a factor. DateRun could potenti
 
 ```r
 x <- with(design, table(Genotype, DateRun))
-ftable(x)
+html_print(ftable(x))
 ```
 
-```
-          DateRun Day-1 Day-2 Day-3 Day-4 Day-5 Day-6 Day-7 Day-8
-Genotype                                                         
-Wild_type             4     8     7     0     1     0     0     0
-S1P2_KO               4     0     0     7     1     0     4     4
-S1P3_KO               0     0     0     0     3     7     0     0
-```
-
-```r
-x <- with(design, table(Genotype, DateRun))
-ftable(x)
-```
-
-```
-          DateRun Day-1 Day-2 Day-3 Day-4 Day-5 Day-6 Day-7 Day-8
-Genotype                                                         
-Wild_type             4     8     7     0     1     0     0     0
-S1P2_KO               4     0     0     7     1     0     4     4
-S1P3_KO               0     0     0     0     3     7     0     0
-```
+<!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
+<!-- Thu Feb 27 22:52:27 2014 -->
+<TABLE border=1>
+<TR> <TH>  </TH> <TH>           </TH> <TH> DateRun </TH> <TH> Day-1 </TH> <TH> Day-2 </TH> <TH> Day-3 </TH> <TH> Day-4 </TH> <TH> Day-5 </TH> <TH> Day-6 </TH> <TH> Day-7 </TH> <TH> Day-8 </TH>  </TR>
+  <TR> <TD align="right"> 1 </TD> <TD> Genotype  </TD> <TD>         </TD> <TD>       </TD> <TD>       </TD> <TD>       </TD> <TD>       </TD> <TD>       </TD> <TD>       </TD> <TD>       </TD> <TD>       </TD> </TR>
+  <TR> <TD align="right"> 2 </TD> <TD> Wild_type </TD> <TD>         </TD> <TD>     4 </TD> <TD>     8 </TD> <TD>     7 </TD> <TD>     0 </TD> <TD>     1 </TD> <TD>     0 </TD> <TD>     0 </TD> <TD>     0 </TD> </TR>
+  <TR> <TD align="right"> 3 </TD> <TD> S1P2_KO   </TD> <TD>         </TD> <TD>     4 </TD> <TD>     0 </TD> <TD>     0 </TD> <TD>     7 </TD> <TD>     1 </TD> <TD>     0 </TD> <TD>     4 </TD> <TD>     4 </TD> </TR>
+  <TR> <TD align="right"> 4 </TD> <TD> S1P3_KO   </TD> <TD>         </TD> <TD>     0 </TD> <TD>     0 </TD> <TD>     0 </TD> <TD>     0 </TD> <TD>     3 </TD> <TD>     7 </TD> <TD>     0 </TD> <TD>     0 </TD> </TR>
+   </TABLE>
 
 
 
@@ -260,14 +250,46 @@ extractByProbe <- function(eDat, probeId, eDesign=design){
 }
 
 plotDiffExp <- function(pDat){
-  p <- ggplot(pDat, aes(x=Genotype, y=gExp, color=Sex)) + 
-      geom_point(alpha=0.6) + 
-      facet_grid(.~BrainRegion)
+  p <- ggplot(pDat, 
+              aes(x=Genotype, y=gExp, 
+                  group=BrainRegion, color=BrainRegion, shape=Sex)) + 
+      geom_point(alpha=0.6, size=3) + 
+      geom_smooth(se=F)
   return(p)
 }
 
 pDat <- extractByProbe(expDat, '99372_at')
-plotDiffExp(pDat)
+plotDiffExp(pDat) + facet_grid(.~Sex)
+```
+
+```
+geom_smooth: method="auto" and size of largest group is <1000, so using loess. Use 'method = x' to change the smoothing method.
+```
+
+```
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+```
+
+```
+geom_smooth: method="auto" and size of largest group is <1000, so using loess. Use 'method = x' to change the smoothing method.
+```
+
+```
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
 ```
 
 ![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13.png) 
@@ -297,8 +319,6 @@ neocortex   female              6.645   6.608   6.398
 ```
 
 
-
-
 ### Q2 Examine the sample correlation matrix
 
 #### a)
@@ -313,10 +333,11 @@ jGreysFun <- colorRampPalette(brewer.pal(n = 9, "Greys"))
 
 
 ```r
+#fig.width=10, fig.height=10}
 sampleCor <- cor(expDat)
 
-myheatmap <- function(sampleCor, ...){
-  heatmap.2(sampleCor, 
+myheatmap <- function(sampCor, ...){
+  heatmap.2(sampCor, 
             Rowv = FALSE, dendrogram="none",
             symm=TRUE, margins=c(10,10),
             trace="none", scale="none", col = jGreysFun(256))
@@ -360,6 +381,48 @@ Numerically, I computed the rank sum test to show that the correlation involving
 
 
 
+
+#### Q2c: Examine the outlier in the context of its experimental group.
+
+Which group is the outlier in, in terms of Genotype, BrainRegion, and Sex? 
+
+
+```r
+
+group.def <- c("Genotype", "BrainRegion", "Sex")
+thisGroup <- design[outlierIdx,]
+```
+
+
+
+```r
+isSameGroup <- function(x, y, group.def=TRUE){
+  return(all(x[group.def] == y[group.def]))
+}
+members <- alply(design, 1, isSameGroup,
+                   y=design[outlierIdx,], group.def=group.def)
+members <- unlist(members)
+colnames(expDat)[members]
+```
+
+```
+[1] "Day-5_S1P3_hipp_f_GSM172974" "Day-6_S1P3_hipp_f_GSM172975"
+[3] "Day-6_S1P3_hipp_f_GSM172976"
+```
+
+
+Scatter plot these samples against each other and comment on the plot. Try to address overplotting! Hint: `splom()` from `lattice` is helpful.
+
+
+```r
+sampLabels <- design$Sid
+sampLabels[outlierIdx] <- "Outlier"
+grpSampCor <- expDat[, members]
+colnames(grpSampCor) <- sampLabels[members]
+splom(grpSampCor, panel = panel.smoothScatter)
+```
+
+![plot of chunk unnamed-chunk-21](figure/unnamed-chunk-21.png) 
 
 
 ### 3  Normalization 
@@ -407,7 +470,7 @@ sampleBoxplot <- function(eDat){
 sampleBoxplot(expDat)
 ```
 
-![plot of chunk unnamed-chunk-20](figure/unnamed-chunk-20.png) 
+![plot of chunk unnamed-chunk-23](figure/unnamed-chunk-23.png) 
 
 
 
@@ -426,7 +489,7 @@ nExpDat <- myNormalize(expDat)
 sampleBoxplot(nExpDat)
 ```
 
-![plot of chunk unnamed-chunk-21](figure/unnamed-chunk-21.png) 
+![plot of chunk unnamed-chunk-24](figure/unnamed-chunk-24.png) 
 
 
 
@@ -436,7 +499,7 @@ sampleBoxplot(nExpDat)
 myheatmap(cor(nExpDat))
 ```
 
-![plot of chunk unnamed-chunk-22](figure/unnamed-chunk-22.png) 
+![plot of chunk unnamed-chunk-25](figure/unnamed-chunk-25.png) 
 
 
 
@@ -449,13 +512,13 @@ nrDes <- design[-c(outlierIdx),]
 myheatmap(cor(nrExpDat))
 ```
 
-![plot of chunk unnamed-chunk-23](figure/unnamed-chunk-231.png) 
+![plot of chunk unnamed-chunk-26](figure/unnamed-chunk-261.png) 
 
 ```r
 sampleBoxplot(nrExpDat)
 ```
 
-![plot of chunk unnamed-chunk-23](figure/unnamed-chunk-232.png) 
+![plot of chunk unnamed-chunk-26](figure/unnamed-chunk-262.png) 
 
 
 
@@ -464,13 +527,26 @@ sampleBoxplot(nrExpDat)
 plotDiffExp(extractByProbe(nrExpDat, '99372_at', nrDes))
 ```
 
-![plot of chunk unnamed-chunk-24](figure/unnamed-chunk-241.png) 
-
-```r
-plotDiffExp(miniDat <- extractByProbe(nrExpDat, '92352_at', nrDes))
+```
+geom_smooth: method="auto" and size of largest group is <1000, so using loess. Use 'method = x' to change the smoothing method.
 ```
 
-![plot of chunk unnamed-chunk-24](figure/unnamed-chunk-242.png) 
+```
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+```
+
+![plot of chunk unnamed-chunk-27](figure/unnamed-chunk-27.png) 
+
+```r
+#plotDiffExp(miniDat <- extractByProbe(nrExpDat, '92352_at', nrDes))
+```
 
 ### 4 Differential expression across genotypes (within neocortex brain region)
 
@@ -479,8 +555,8 @@ a)
 
 ```r
 isNc <- nrDes$BrainRegion == "neocortex"
-ncDes <- subset(design, subset=isNc)
-ncDat <- subset(nrExpDat, select=isNc )
+ncDes <- subset(nrDes, subset=isNc)
+ncDat <- subset(nrExpDat, select=isNc)
 ```
 
 
@@ -489,9 +565,10 @@ ncDat <- subset(nrExpDat, select=isNc )
 ncDesMat <- model.matrix(~Genotype, ncDes)
 ncFit <- lmFit(ncDat, ncDesMat)
 ncEbFit <- eBayes(ncFit)
-koHits <- topTable(ncEbFit, number=50,
+koHits <- topTable(ncEbFit, number=50, adjust.method="BH",
                    coef = grep("KO", colnames(coef(ncEbFit))))
 ```
+
 
 
 #### b)
@@ -508,17 +585,20 @@ Warning: Discrepancy: Rowv is FALSE, while dendrogram is `both'. Omitting row de
 Warning: Discrepancy: Colv is FALSE, while dendrogram is `none'. Omitting column dendogram.
 ```
 
-![plot of chunk unnamed-chunk-27](figure/unnamed-chunk-27.png) 
+![plot of chunk unnamed-chunk-30](figure/unnamed-chunk-30.png) 
 
 
 #### c)
 
 ```r
-threshold <- 1e-4
-cnt <- sum(koHits$P.Value < threshold)
+pMax <- 1e-3
+unadjTop <- topTable(ncEbFit, number=Inf, 
+                     adjust.method="none", p.value=pMax,
+                     coef = grep("KO", colnames(coef(ncEbFit))))
 ```
 
-The number of hits with p-value smaller than 10<sup>-4</sup> is cnt.
+The number of hits with p-value smaller than 0.001 is 
+96.
 
 Computing FDR using q-value (adj.P.Val)
 
@@ -533,13 +613,166 @@ eFP <- nrow(koHits) * q # expected # FD
 d)
 
 ```r
-interesting <- rownames(head(koHits,3))
+intrProbes <- rownames(head(koHits,3))
+intDat <- ldply(intrProbes, function(probe){
+  data <- extractByProbe(ncDat, probe, nrDes)
+  data$status <- rep("Interesting", nrow(data))
+  return(data)
+})
+```
+
+```
+Error: arguments imply differing number of rows: 49, 25
+```
+
+```r
+set.seed(540)
+boringIdx <- sample(which(rownames(ncDat) %in% rownames(unadjTop)),3)
+borProbes <- rownames(ncDat)[boringIdx]
+```
+
+
+
+```r
+
+
 for (pb in interesting){
+  print(plotDiffExp(extractByProbe(ncDat, pb, nrDes)))
+}
+```
+
+```
+Error: object 'interesting' not found
+```
+
+```r
+for (pb in boring){
   print(plotDiffExp(extractByProbe(nrExpDat, pb, nrDes)))
 }
 ```
 
-![plot of chunk unnamed-chunk-30](figure/unnamed-chunk-301.png) ![plot of chunk unnamed-chunk-30](figure/unnamed-chunk-302.png) ![plot of chunk unnamed-chunk-30](figure/unnamed-chunk-303.png) 
+```
+Error: object 'boring' not found
+```
+
+
+e) 
+
+```r
+s1p3KOHits <- topTable(ncEbFit, number=Inf,
+                       adjust.method="BH", p.value=0.1,
+                       coef = grep("S1P3_KO", colnames(coef(ncEbFit))))
+nrow(s1p3KOHits)
+```
+
+```
+[1] 61
+```
+
+
+
+Q5 (5 points) Differential expression analysis for Genotype * BrainRegion.
+
+You should be using data with the worst outlier removed, after quantile normalization and for both brain regions.
+
+Q5a: Fit a 3x2 full factorial model.
+
+Test for any effect of Genotype and/or BrainRegion, i.e. test your model against a model with just an intercept. How many probes have a BH-adjusted p-value, a.k.a. q-value, less than 1e-3?
+
+
+
+```r
+desMat <- model.matrix(~Genotype*BrainRegion, nrDes)
+fit <- lmFit(nrExpDat, desMat)
+ebFit <- eBayes(fit)
+hits <- topTable(ebFit, number=Inf, adjust.method="BH", p.value=1e-3,
+                   coef = colnames(coef(ebFit))[-1])
+nrow(hits)
+```
+
+```
+[1] 1524
+```
+
+
+
+Q5b: Test the null hypothesis that BrainRegion doesn't matter, i.e. that all terms involving BrainRegion are zero.
+How many probes have a BH-adjusted p-value less than 0.1?
+
+
+```r
+hitsBrn <- topTable(ebFit, number=Inf, adjust.method="BH", p.value=0.1,
+  coef = grep("BrainRegion", colnames(coef(ebFit))))
+nrow(hitsBrn)
+```
+
+```
+[1] 3227
+```
+
+
+Q5c: Highlight some probes where BrainRegion does and does not matter.
+
+Using the results from Q5b, plot and describe some results for a couple of hits and non-hits.
+
+
+```r
+interestBrn <- rownames(head(hitsBrn,3))
+for (pb in interestBrn){
+  print(plotDiffExp(extractByProbe(nrExpDat, pb, nrDes)))
+}
+```
+
+```
+geom_smooth: method="auto" and size of largest group is <1000, so using loess. Use 'method = x' to change the smoothing method.
+```
+
+```
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+```
+
+![plot of chunk unnamed-chunk-38](figure/unnamed-chunk-381.png) 
+
+```
+geom_smooth: method="auto" and size of largest group is <1000, so using loess. Use 'method = x' to change the smoothing method.
+```
+
+```
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+```
+
+![plot of chunk unnamed-chunk-38](figure/unnamed-chunk-382.png) 
+
+```
+geom_smooth: method="auto" and size of largest group is <1000, so using loess. Use 'method = x' to change the smoothing method.
+```
+
+```
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+```
+
+![plot of chunk unnamed-chunk-38](figure/unnamed-chunk-383.png) 
 
 
 
@@ -552,18 +785,73 @@ for (pb in boring){
 }
 ```
 
-![plot of chunk unnamed-chunk-31](figure/unnamed-chunk-311.png) ![plot of chunk unnamed-chunk-31](figure/unnamed-chunk-312.png) ![plot of chunk unnamed-chunk-31](figure/unnamed-chunk-313.png) 
+```
+geom_smooth: method="auto" and size of largest group is <1000, so using loess. Use 'method = x' to change the smoothing method.
+```
 
-e)
+```
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+```
+
+![plot of chunk unnamed-chunk-39](figure/unnamed-chunk-391.png) 
+
+```
+geom_smooth: method="auto" and size of largest group is <1000, so using loess. Use 'method = x' to change the smoothing method.
+```
+
+```
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+```
+
+![plot of chunk unnamed-chunk-39](figure/unnamed-chunk-392.png) 
+
+```
+geom_smooth: method="auto" and size of largest group is <1000, so using loess. Use 'method = x' to change the smoothing method.
+```
+
+```
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+Warning: pseudoinverse used at 0.99
+Warning: neighborhood radius 1.01
+Warning: reciprocal condition number  0
+Warning: There are other near singularities as well. 4.0401
+```
+
+![plot of chunk unnamed-chunk-39](figure/unnamed-chunk-393.png) 
+
+
+
+
+Q5d: Test the null hypothesis that Genotype doesn't matter, i.e. that all terms involving Genotype are zero.
+
+How many probes have a BH-adjusted p-value less than 0.1? Compare these results to those obtained for BrainRegion in Q5b, either based on this count or based on all the p-values. What do you conclude about the relative magnitude of the influence of brain region vs. genotype on gene expression?
+
 
 ```r
-s1p3KOHits <- topTable(ncEbFit, p.value=0.1, number=Inf,
-                   coef = grep("S1P3_KO", colnames(coef(ncEbFit))))
-nrow(s1p3KOHits)
+hitsGn <- topTable(ebFit, number=Inf, adjust.method="BH", p.value=0.1,
+  coef = grep("Genotype", colnames(coef(ebFit))))
+nrow(hitsGn)
 ```
 
 ```
-[1] 61
+[1] 141
 ```
 
 
@@ -596,7 +884,5 @@ nrow(s1p3KOHits)
 # heatmap(hDat, Colv = NA, Rowv = NA, scale=c("column"), 
 #         margins = c(5, 8), col = jPurplesFun(256))
 ```
-
-
 
 
