@@ -1,1 +1,1 @@
-* [Homework 1](code_stat540/hw1)
+* [Homework 1](hw1)

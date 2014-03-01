@@ -10,12 +10,12 @@ S1P2, when mutated, results in seizures. While mutated S1P3, a related gene, doe
 Expression is measured on the Affymetrix MG_U74Av2 platform.
 
 #### Report
-[Report quick preview](assign1.md)
-[Report Source](assign1.rmd)
-[Report preview (won't work on private repo)](http://htmlpreview.github.io/?https://raw.github.com/sibyl229/stat540-2014-gao-wensi-hw/master/code_stat540/hw1/assign1.html)
+* [Report quick preview](assign1.md)
+* [Report Source](assign1.rmd)
+* [Report preview (won't work on private repo)](http://htmlpreview.github.io/?https://raw.github.com/sibyl229/stat540-2014-gao-wensi-hw/master/code_stat540/hw1/assign1.html)
 
 #### Data
-[Data](../../data/mouseBrain/)
+* [Data](../../data/mouseBrain/)
 
 ### Dependencies
 

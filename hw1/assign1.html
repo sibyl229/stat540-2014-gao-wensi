@@ -386,9 +386,9 @@ library(MIfuns, warn.conflicts = FALSE, quietly = TRUE)  # to help print ftable
 <pre><code>## MIfuns 5.1
 </code></pre>
 
-<pre><code class="r">design &lt;- read.table(&quot;../../data/mouseBrain/GSE7191-design.txt&quot;,
+<pre><code class="r">design &lt;- read.table(&quot;../data/mouseBrain/GSE7191-design.txt&quot;,
                      row.names=1, header=TRUE)
-expDat &lt;- read.table(&quot;../../data/mouseBrain/GSE7191-data.txt&quot;,
+expDat &lt;- read.table(&quot;../data/mouseBrain/GSE7191-data.txt&quot;,
                      row.name=&quot;probe&quot;, header=TRUE)
 design$Sid &lt;- factor(rownames(design))
 
@@ -500,7 +500,7 @@ html_print(addmargins(x))
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
 
-<!-- Fri Feb 28 05:44:38 2014 -->
+<!-- Fri Feb 28 16:07:45 2014 -->
 
 <TABLE border=1>
 <TR> <TH>  </TH> <TH> Wild_type </TH> <TH> S1P2_KO </TH> <TH> S1P3_KO </TH> <TH> Sum </TH>  </TR>
@@ -519,7 +519,7 @@ html_print(ftable(x))
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
 
-<!-- Fri Feb 28 05:44:39 2014 -->
+<!-- Fri Feb 28 16:07:45 2014 -->
 
 <TABLE border=1>
 <TR> <TH>  </TH> <TH>        </TH> <TH>             </TH> <TH> Genotype </TH> <TH> Wild_type </TH> <TH> S1P2_KO </TH> <TH> S1P3_KO </TH>  </TR>
@@ -538,7 +538,7 @@ html_print(ftable(x))
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
 
-<!-- Fri Feb 28 05:44:39 2014 -->
+<!-- Fri Feb 28 16:07:45 2014 -->
 
 <TABLE border=1>
 <TR> <TH>  </TH> <TH>           </TH> <TH> DateRun </TH> <TH> Day-1 </TH> <TH> Day-2 </TH> <TH> Day-3 </TH> <TH> Day-4 </TH> <TH> Day-5 </TH> <TH> Day-6 </TH> <TH> Day-7 </TH> <TH> Day-8 </TH>  </TR>
@@ -591,7 +591,7 @@ html_print(ftable(x))
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
 
-<!-- Fri Feb 28 05:44:39 2014 -->
+<!-- Fri Feb 28 16:07:46 2014 -->
 
 <TABLE border=1>
 <TR> <TH>  </TH> <TH>             </TH> <TH>        </TH> <TH> Genotype </TH> <TH> Wild_type </TH> <TH> S1P2_KO </TH> <TH> S1P3_KO </TH>  </TR>
