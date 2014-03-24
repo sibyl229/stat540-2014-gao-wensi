@@ -188,7 +188,7 @@ html_print(addmargins(x))
 ```
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
-<!-- Fri Feb 28 16:07:45 2014 -->
+<!-- Sun Mar  2 11:15:17 2014 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH> Wild_type </TH> <TH> S1P2_KO </TH> <TH> S1P3_KO </TH> <TH> Sum </TH>  </TR>
   <TR> <TD align="right"> hippocampus </TD> <TD align="right"> 10 </TD> <TD align="right"> 10 </TD> <TD align="right"> 5 </TD> <TD align="right"> 25 </TD> </TR>
@@ -208,7 +208,7 @@ html_print(ftable(x))
 ```
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
-<!-- Fri Feb 28 16:07:45 2014 -->
+<!-- Sun Mar  2 11:15:17 2014 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH>        </TH> <TH>             </TH> <TH> Genotype </TH> <TH> Wild_type </TH> <TH> S1P2_KO </TH> <TH> S1P3_KO </TH>  </TR>
   <TR> <TD align="right"> 1 </TD> <TD> Sex    </TD> <TD> BrainRegion </TD> <TD>          </TD> <TD>           </TD> <TD>         </TD> <TD>         </TD> </TR>
@@ -229,7 +229,7 @@ html_print(ftable(x))
 ```
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
-<!-- Fri Feb 28 16:07:45 2014 -->
+<!-- Sun Mar  2 11:15:17 2014 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH>           </TH> <TH> DateRun </TH> <TH> Day-1 </TH> <TH> Day-2 </TH> <TH> Day-3 </TH> <TH> Day-4 </TH> <TH> Day-5 </TH> <TH> Day-6 </TH> <TH> Day-7 </TH> <TH> Day-8 </TH>  </TR>
   <TR> <TD align="right"> 1 </TD> <TD> Genotype  </TD> <TD>         </TD> <TD>       </TD> <TD>       </TD> <TD>       </TD> <TD>       </TD> <TD>       </TD> <TD>       </TD> <TD>       </TD> <TD>       </TD> </TR>
@@ -287,7 +287,7 @@ html_print(ftable(x))
 ```
 
 <!-- html table generated in R 3.0.2 by xtable 1.7-1 package -->
-<!-- Fri Feb 28 16:07:46 2014 -->
+<!-- Sun Mar  2 11:15:17 2014 -->
 <TABLE border=1>
 <TR> <TH>  </TH> <TH>             </TH> <TH>        </TH> <TH> Genotype </TH> <TH> Wild_type </TH> <TH> S1P2_KO </TH> <TH> S1P3_KO </TH>  </TR>
   <TR> <TD align="right"> 1 </TD> <TD> BrainRegion </TD> <TD> Sex    </TD> <TD>          </TD> <TD>           </TD> <TD>         </TD> <TD>         </TD> </TR>
@@ -566,18 +566,21 @@ In the context of that model, what statistical test(s) are you conducting? (You 
 
 Display the expression data for the top 50 probes in a heat map. Order the probes by p-value; order the samples by genotype.
 
+After normalizing the each probe (to counter the effect of highly expressed genes and genes that hybridize well to these probes), the heapmap for top hits with Genotype effect looks like:
+
 
 ```r
 koHits <- head(koFullTable, 50)
 hitsExp <- ncDat[rownames(koHits), order(ncDes$Genotype)]
 heatmap.2(as.matrix(hitsExp), 
-          Colv = NA, Rowv = NA, scale="none", trace="none",
+          Colv = NA, Rowv = NA, scale="row", trace="none",
           margins = c(12, 10), col = jGreysFun(256))
 ```
 
 ![plot of chunk unnamed-chunk-28](figure/unnamed-chunk-28.png) 
 
 
+It appears that samples of the same genotype form a  sowewhat distinct pattern from another. This makes sense because these probes were tested to show the Genotype effect.
 
 #### Q4c: Count your hits.
 

@@ -410,14 +410,17 @@ In the context of that model, what statistical test(s) are you conducting? (You 
 
 Display the expression data for the top 50 probes in a heat map. Order the probes by p-value; order the samples by genotype.
 
-```{r fig.width=12, fig.height=12}
+After normalizing the each probe (to counter the effect of highly expressed genes and genes that hybridize well to these probes), the heapmap for top hits with Genotype effect looks like:
+
+```{r fig.width=12, fig.height=8}
 koHits <- head(koFullTable, 50)
 hitsExp <- ncDat[rownames(koHits), order(ncDes$Genotype)]
 heatmap.2(as.matrix(hitsExp), 
-          Colv = NA, Rowv = NA, scale="none", trace="none",
+          Colv = NA, Rowv = NA, scale="row", trace="none",
           margins = c(12, 10), col = jGreysFun(256))
 ```
 
+It appears that samples of the same genotype form a  sowewhat distinct pattern from another. This makes sense because these probes were tested to show the Genotype effect.
 
 #### Q4c: Count your hits.
 
