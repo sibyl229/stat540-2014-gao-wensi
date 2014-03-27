@@ -1,5 +1,8 @@
 *.pdf
 
+# data directory
+data/
+
 # editor generated files
 *~
 \#*
