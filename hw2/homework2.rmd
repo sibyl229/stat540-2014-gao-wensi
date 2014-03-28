@@ -1,17 +1,19 @@
 Homework 02
 ======================================================================
-```{r}
+```{r echo=FALSE, results='hide', warning=FALSE, message=FALSE}
 library(plyr)
 library(ggplot2)
 library(limma)
 library(lattice)
 #library(xtable)
 library(RColorBrewer)
-library(gplots, warn.conflicts = FALSE)
+library(gplots)
+library(yeast2.db)
+library(testthat)
 #library(preprocessCore)  # to help normalization
-#library(reshape, warn.conflicts = FALSE)
+library(reshape)
 
-#library(MIfuns, warn.conflicts = FALSE, quietly=TRUE) # to help print
+#library(MIfuns) # to help print
 ```
 
 ```{r include = FALSE}
@@ -134,8 +136,7 @@ p <- p + geom_text()
 Fix the label swap identified in question 1b. We want to swap b1 <--> c2. Revisit one or more elements of question 1b to sanity check before proceeding. 
 
 ```{r}
-
-chemoSmpls <- c("c1","c3", "b1")
+# correcting the labels (relying on copy-on-modify property of R)
 oldSampLabels <- sampleLabels
 sampleLabels[grep("b1", oldSampLabels)] <- "c2"
 sampleLabels[grep("c2", oldSampLabels)] <- "b1"
@@ -155,7 +156,12 @@ myheatmap(sampleCor)
 
 Now use this data to do a differential expression analysis with `limma`.
 
-
+```{r}
+desMat <- model.matrix(~condition, design)
+mcEBFit <- eBayes(lmFit(mcDat, desMat))
+mcTT <- topTable(mcEBFit, number=Inf, adjust.method="BH",
+                 coef = grep("condition", colnames(desMat)))
+```
 
 
 Package these results in a data frame with six columns:
@@ -174,36 +180,74 @@ Package these results in a data frame with six columns:
 
 >  The gene id can be retrieved using the `yeast2.db` package from Bioconductor. In particular, the `yeast2ORF` object available after loading `yeast2.db` contains the mapping between probe IDs and yeast gene ids. Assuming you have a character vector of probes called `probe.ids`, the gene IDs can be retrieved using `gene.ids <- unlist(mget(probe.ids, yeast2ORF))`.
 
+```{r}
+# gene names sorted by toptable result above
+genes <- unlist(mget(rownames(mcTT), yeast2ORF))
+expect_equal(names(genes), rownames(mcTT))
+
+mcTT <- mcTT[, c("P.Value", "adj.P.Val", "logFC", "t")]
+colnames(mcTT) <- c("p.value", "q.value", "log.fc", "test.stat")
+mcTT <- cbind(probe.id=rownames(mcTT), gene.id=genes, mcTT)
+
+```
+
 Remove any rows with probes which don't map to genes. You'll be able to find these because they will have `NA` as their gene id. Work with this data.frame to answer the questions below.
 
-
+```{r}
+mcTT <- mcTT[!is.na(mcTT$gene.id),]
+```
 
 
 i. How many probes did we start with and how many remain after removing probes without gene ids?
 
+We started with `r nrow(mcDat)` probes. And `r nrow(mcTT)` remain after removing probes without gene ids.
 
 
 
 ii. Illustrate the differential expression between the batch and the chemostat samples for the top hit (i.e., probe with the lowest p- or q-value).
 
+```{r}
+expect_equal(rownames(design), colnames(mcDat))
 
+prepareData <- function(probeId){
+  probeDat <- mcDat[rownames(mcDat)==probeId,]
+  
+  newDat <- cbind(design, t(probeDat))
+  
+  # in case of multiple probes selected
+  newDat <- melt(newDat, "condition", variable_name="probe.id")
+  newDat <- rename(newDat, c("value"="expression"))  # rename column
+  return(newDat)
+}
+
+topHitPid <- mcTT[1,"probe.id"]
+topHitDat <- prepareData(topHitPid)
+
+p <- ggplot(topHitDat, aes(x=condition, y=expression, color=condition)) 
+p <- p + geom_point()
+p
+```
 
 
 iii. How many probes are identified as differentially expressed at a false discovery rate (FDR) of 1e-5 (note: this is a FDR cutoff used in the original paper)?
 
+```{r}
+fdr <- 1e-5
+nHits <- sum(mcTT$q.value < fdr)
+```
 
-
+`r nHits` probes are identified as differentially expressed at FDR of `r fdr`.
 
 iv. Save your results for later with `write.table()`.
 
 > When using write.table to save the data, you need to pass the arguments `row.names = TRUE, col.names = NA` to make sure the headers are written correctly.
 
-
-
+```{r}
+write.table(mcTT, "results/condition.topTable.GSE37599.tsv",
+            row.names = TRUE, col.names = NA, sep="\t")
+```
 
 ## Q2) RNA-Seq Analysis
-
-We have aligned the RNA-Seq library using the [Stampy](http://www.well.ox.ac.uk/project-stampy) aligner and generated count data. The data file is available as [stampy.counts.tsv](../../examples/yeastPlatforms/data/stampy.counts.tsv). In this question you will use this data to do a differential expression analysis using different packages from Bioconductor.
 
 ### a) (1pt) Load RNA Count Data and Sanity Check
 

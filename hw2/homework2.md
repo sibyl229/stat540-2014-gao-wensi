@@ -1,27 +1,6 @@
 Homework 02
 ======================================================================
 
-```r
-library(plyr)
-library(ggplot2)
-library(limma)
-library(lattice)
-# library(xtable)
-library(RColorBrewer)
-library(gplots, warn.conflicts = FALSE)
-```
-
-```
-## KernSmooth 2.23 loaded
-## Copyright M. P. Wand 1997-2009
-```
-
-```r
-# library(preprocessCore) # to help normalization library(reshape,
-# warn.conflicts = FALSE)
-
-# library(MIfuns, warn.conflicts = FALSE, quietly=TRUE) # to help print
-```
 
 
 
@@ -143,8 +122,7 @@ Fix the label swap identified in question 1b. We want to swap b1 <--> c2. Revisi
 
 
 ```r
-
-chemoSmpls <- c("c1","c3", "b1")
+# correcting the labels (relying on copy-on-modify property of R)
 oldSampLabels <- sampleLabels
 sampleLabels[grep("b1", oldSampLabels)] <- "c2"
 sampleLabels[grep("c2", oldSampLabels)] <- "b1"
@@ -182,6 +160,13 @@ myheatmap(sampleCor)
 Now use this data to do a differential expression analysis with `limma`.
 
 
+```r
+desMat <- model.matrix(~condition, design)
+mcEBFit <- eBayes(lmFit(mcDat, desMat))
+mcTT <- topTable(mcEBFit, number=Inf, adjust.method="BH",
+                 coef = grep("condition", colnames(desMat)))
+```
+
 
 
 Package these results in a data frame with six columns:
@@ -200,18 +185,52 @@ Package these results in a data frame with six columns:
 
 >  The gene id can be retrieved using the `yeast2.db` package from Bioconductor. In particular, the `yeast2ORF` object available after loading `yeast2.db` contains the mapping between probe IDs and yeast gene ids. Assuming you have a character vector of probes called `probe.ids`, the gene IDs can be retrieved using `gene.ids <- unlist(mget(probe.ids, yeast2ORF))`.
 
+
+```r
+# gene names sorted by toptable result above
+genes <- unlist(mget(rownames(mcTT), yeast2ORF))
+expect_equal(names(genes), rownames(mcTT))
+
+mcTT <- mcTT[, c("P.Value", "adj.P.Val", "logFC", "t")]
+colnames(mcTT) <- c("p.value", "q.value", "log.fc", "test.stat")
+mcTT <- cbind(probe.id=rownames(mcTT), gene.id=genes, mcTT)
+```
+
+
 Remove any rows with probes which don't map to genes. You'll be able to find these because they will have `NA` as their gene id. Work with this data.frame to answer the questions below.
 
+
+```r
+mcTT <- mcTT[!is.na(mcTT$gene.id),]
+```
 
 
 
 i. How many probes did we start with and how many remain after removing probes without gene ids?
 
+We started with 10928 probes. And 5705 remain after removing probes without gene ids.
 
 
 
 ii. Illustrate the differential expression between the batch and the chemostat samples for the top hit (i.e., probe with the lowest p- or q-value).
 
+
+```r
+expect_equal(rownames(design), colnames(mcDat))
+prepareData <- function(probeId){
+  probeDat <- mcDat[rownames(mcDat)==probeId,]
+  newDat <- cbind(design, t(probeDat))
+  return(newDat)
+}
+topHitPid <- mcTT[1,"probe.id"]
+topHitDat <- prepareData(topHitPid)
+
+ggplot(topHitDat, aes(x=condition, y))
+```
+
+```
+Error: No layers in plot
+```
 
 
 
@@ -537,6 +556,6 @@ You can also embed plots, for example:
 plot(cars)
 ```
 
-![plot of chunk unnamed-chunk-11](figure/unnamed-chunk-11.png) 
+![plot of chunk unnamed-chunk-15](figure/unnamed-chunk-15.png) 
 
 
