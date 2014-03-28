@@ -1,6 +1,34 @@
 Homework 02
 ======================================================================
 
+```r
+library(plyr)
+library(ggplot2)
+library(limma)
+library(lattice)
+# library(xtable)
+library(RColorBrewer)
+library(gplots, warn.conflicts = FALSE)
+```
+
+```
+## KernSmooth 2.23 loaded
+## Copyright M. P. Wand 1997-2009
+```
+
+```r
+# library(preprocessCore) # to help normalization library(reshape,
+# warn.conflicts = FALSE)
+
+# library(MIfuns, warn.conflicts = FALSE, quietly=TRUE) # to help print
+```
+
+
+
+
+
+
+
 
 ## Q1) Microarray Analysis
 
@@ -9,9 +37,18 @@ The six samples in this study, 3 replicates for each of the two conditions, were
 ### a) (1pt) Load Microarray Data
 
 Load the normalized data.   
+
+```r
+mcDat <- read.table("../data/yeast/GSE37599-data.tsv", 
+                    header=TRUE, sep="\t", row.names=1)
+```
+
   
 What are dimensions of the dataset? In addition to reporting number of rows and columns, make it clear what rows and columns represent and how you're interpreting column names.
 
+The dataset has 10928 rows, each of which represents a probe. It has 10928 columns, each of which represents a sample. 
+
+First letter in the column name refers to the condition (batch vs chemostat) and the number refers to which replicate the sample belongs to.
 
 
 
@@ -21,21 +58,80 @@ The labels on two of the samples have been swapped, that is one of the batch sam
   
 i. (High volume) scatter plot matrix. 
 
+```r
+# png("figure/sampleSwap.scatter.png")
+# splom(mcDat, panel = panel.smoothScatter)
+# dev.off()
+```
 
+![Scatter plot across all pair of samples](figure/sampleSwap.scatter.png)
 
+b1 and c2 are swapped, because the scatter plots show that b1 and c1 are each better correlated (showing less scatter) with samples of the Opposite condition than samples of its labeled condition.
 
 ii. A heatmap of the first 100 genes (you can try more but it gets slow).
 
 
+```r
+# creating some color palette
+#jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
+jGreysFun <- colorRampPalette(brewer.pal(n = 9, "Greys"))
 
+
+
+myheatmap <- function(sampCor, ...){
+  heatmap.2(sampCor, 
+            Rowv = FALSE, dendrogram="none",
+            symm=TRUE, margins=c(10,10),
+            trace="none", scale="none", col = jGreysFun(256))
+}
+
+# png("figure/sampleSwapSample.heatmap.png")
+# myheatmap(as.matrix(mcDat[1:100,]))
+# dev.off()
+```
+
+![100 gene expression heatmap](figure/sampleSwapSample.heatmap.png)
+
+The heatmap of expression level of 100 gene across samples shows that the expression pattern is similar for (b2, b3, c2) and (b1, c1, c3). This indicates that b1 and c2 are swapped.
 
 iii. Compute the Pearson correlation of the samples and plot the results using a heatmap.
 
+
+```r
+sampleCor <- cor(mcDat)
+myheatmap(sampleCor)
+```
+
+![plot of chunk unnamed-chunk-7](figure/unnamed-chunk-7.png) 
 
 
 
 iv. Scatterplot the six data samples with respect to the first two principal components and label the samples.
 
+
+```r
+createDesign <- function(mcDat, chemoLabels){
+  sampleLabels <- colnames(mcDat)
+  conditions <- factor(rep("batch", length(sampleLabels)),
+                       levels=c("batch", "chemostat"))
+  conditions[sampleLabels %in% chemoLabels] <- "chemostat"
+  mcDes <- data.frame(condition=conditions)
+  rownames(mcDes) <- sampleLabels  
+  return(mcDes)
+} 
+
+sampleLabels <- colnames(mcDat)
+chemoSmpls <- grep("c", sampleLabels, value=TRUE)
+design <- createDesign(mcDat, 
+                       chemoLabels=chemoSmpls)
+
+mcPC <- prcomp(mcDat)$rotation[,1:2]
+mcPC <- cbind(design, mcPC)
+p <- ggplot(mcPC, aes(x=PC1, y=PC2, color=condition, 
+                       label=rownames(mcPC)))
+p <- p + geom_point() 
+p <- p + geom_text()
+```
 
 
 
@@ -45,6 +141,41 @@ iv. Scatterplot the six data samples with respect to the first two principal com
 
 Fix the label swap identified in question 1b. We want to swap b1 <--> c2. Revisit one or more elements of question 1b to sanity check before proceeding. 
 
+
+```r
+
+chemoSmpls <- c("c1","c3", "b1")
+oldSampLabels <- sampleLabels
+sampleLabels[grep("b1", oldSampLabels)] <- "c2"
+sampleLabels[grep("c2", oldSampLabels)] <- "b1"
+
+print(oldSampLabels)
+```
+
+```
+[1] "b1" "b2" "b3" "c1" "c2" "c3"
+```
+
+```r
+print(sampleLabels)
+```
+
+```
+[1] "c2" "b2" "b3" "c1" "b1" "c3"
+```
+
+```r
+
+# relabel samples by the correct labels
+colnames(mcDat) <- sampleLabels  
+# sort the data samples to match with the design
+mcDat <- mcDat[,rownames(design)]
+
+sampleCor <- cor(mcDat)
+myheatmap(sampleCor)
+```
+
+![plot of chunk unnamed-chunk-9](figure/unnamed-chunk-9.png) 
 
 
 
@@ -389,13 +520,13 @@ summary(cars)
 ```
 
 ```
-##      speed           dist    
-##  Min.   : 4.0   Min.   :  2  
-##  1st Qu.:12.0   1st Qu.: 26  
-##  Median :15.0   Median : 36  
-##  Mean   :15.4   Mean   : 43  
-##  3rd Qu.:19.0   3rd Qu.: 56  
-##  Max.   :25.0   Max.   :120
+     speed           dist    
+ Min.   : 4.0   Min.   :  2  
+ 1st Qu.:12.0   1st Qu.: 26  
+ Median :15.0   Median : 36  
+ Mean   :15.4   Mean   : 43  
+ 3rd Qu.:19.0   3rd Qu.: 56  
+ Max.   :25.0   Max.   :120  
 ```
 
 
@@ -406,6 +537,6 @@ You can also embed plots, for example:
 plot(cars)
 ```
 
-![plot of chunk unnamed-chunk-2](figure/unnamed-chunk-2.png) 
+![plot of chunk unnamed-chunk-11](figure/unnamed-chunk-11.png) 
 
 
