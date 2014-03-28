@@ -246,7 +246,7 @@ iii. How many probes are identified as differentially expressed at a false disco
 
 ```r
 fdr <- 1e-5
-nHits <- sum(mcTT$q.value < fdr)
+nHits <- sum(mcTT$q.value <= fdr)
 ```
 
 
@@ -274,6 +274,7 @@ write.table(mcTT, "results/condition.topTable.GSE37599.tsv",
 ```r
 rcDat <- read.table("../data/yeast/stampy.counts.tsv", 
                     header=TRUE, row.names=1)
+rcDat <- rcDat[, rownames(design)]  # make sure that sample (column) order matches the design
 ```
 
 
@@ -293,7 +294,7 @@ myheatmap(sampleCor)
 ![plot of chunk unnamed-chunk-17](figure/unnamed-chunk-17.png) 
 
 
-Since
+Since samples are strongly correlated within same condition, and less correlated between different conditions, no smaple seems to have occured.
 
 ### b) (2pt) `edgeR` Differential Expression Analysis
 
@@ -301,7 +302,34 @@ Now you will use `edgeR` to identify differentially expressed genes between the 
 
 i)  Recall that `edgeR` needs to estimate the dispersion parameter in the negative binomial model using an empirical Bayes method. Estimate the dispersion parameters using `estimateGLMCommonDisp`, `estimateGLMTrendedDisp` and `estimateGLMTagwiseDisp`. Plot the tagwise dispersion against log2-CPM (counts per million).  
 
-> Seminar 7 was now corrected so that the design matrix is used as an argument of `estimateGLMTrendedDisp`.
+
+```r
+dge.glm <- DGEList(counts=rcDat, group=design$condition)
+desMat <- model.matrix(~condition, design)
+dge.glm.com.disp <- estimateGLMCommonDisp(dge.glm, desMat, verbose=TRUE)
+```
+
+```
+Disp = 0.00551 , BCV = 0.0742 
+```
+
+```r
+dge.glm.trend.disp <- estimateGLMTrendedDisp(dge.glm.com.disp, desMat)
+```
+
+```
+Loading required package: splines
+```
+
+```r
+dge.glm.tag.disp <- estimateGLMTagwiseDisp(dge.glm.trend.disp, desMat)
+#plot the tagwise dispersion against log2-CPM (counts per million)
+plotBCV(dge.glm.tag.disp)
+```
+
+![plot of chunk unnamed-chunk-18](figure/unnamed-chunk-18.png) 
+
+
 
 
 
@@ -309,6 +337,11 @@ i)  Recall that `edgeR` needs to estimate the dispersion parameter in the negati
 ii)  Use the glm functionality of `edgeR`, i.e. use the `glmFit` function, to identify differentially expressed genes between conditions. 
 
 
+```r
+edger.fit <- glmFit(dge.glm.tag.disp, desMat)
+edger.lrt <- glmLRT(edger.fit, coef=grep("condition", colnames(desMat)))
+edger.results <- topTags(edger.lrt, n=Inf, adjust.method="BH", sort.by="PValue")
+```
 
 
 Package these results in a data.frame called 'edger.results' with five columns:
@@ -323,20 +356,46 @@ Package these results in a data.frame called 'edger.results' with five columns:
 
 * test.stat - The test statistic, which for `edgeR` is a likelihood ratio. This is the column called "LR" in the `edgeR` results table.
 
+
+```r
+edger.results <- data.frame(edger.results[,c("PValue", "FDR", "logFC", "LR")])
+colnames(edger.results) <- c("p.value", "q.value", "log.fc", "test.stat")
+edger.results <- cbind(gene.id=rownames(edger.results), edger.results)
+```
+
+
 Save your results for later with `write.table()` in file called `stampy.edger.results.tsv`.
 
+
+```r
+write.table(edger.results, "results/stampy.edger.results.tsv",
+            row.names=TRUE, col.names = NA, sep="\t")
+```
 
 
 
 iii) How many genes are differentially expressed between conditions at a false discovery rate (FDR) of 1e-5?
 
 
+```r
+fdr <- 1e-5
+edger.nHits <- sum(edger.results$q.value <= 1e-5)
+```
 
+
+2669 genes are differentially expressed between conditions at FDR of 10<sup>-5</sup>.
 
 iv) How many genes are differentially over-expressed in chemostat compared to batch medium samples at a false discovery rate (FDR) of 1e-5?
 
 
+```r
+edger.OX.nHits <- sum(
+  edger.results$q.value <= 1e-5 & 
+  edger.results$log.fc > 0)
+```
 
+
+1515 are differentially over-expressed in chemostat compared to batch with 10<sup>-5</sup>.
 
 ### c) (2pt) `DESeq` Differential Expression Analysis
 
@@ -345,9 +404,37 @@ Now you will use `DESeq` to identify differentially expressed genes between the 
 i)  `DESeq` also needs to estimate the dispersion. Use `estimateSizeFactors` and `estimateDispersions` to normalize the data. Plot the estimated dispersions against the mean normalized counts.
 
 
+```r
+
+#reading in the same count table data and grouping information
+deSeqDat <- newCountDataSet(rcDat, conditions=design$condition)
+#head(counts(deDat))
+
+# account for differences in library coverage and
+deSeqDat <- estimateSizeFactors(deSeqDat)  
+#sizeFactors(deSeqDat)
+deSeqDat <- estimateDispersions(deSeqDat)   # estimate variance
+
+#plotting the estimated dispersions against the mean normalized counts
+plotDispEsts(deSeqDat)
+```
+
+![plot of chunk unnamed-chunk-24](figure/unnamed-chunk-24.png) 
 
 
 ii)  Use the negative binomial test of `DESeq`, i.e. use the `nbinomTest` function, to identify differentially expressed genes between conditions. Note that the output of this function does not return results ordered by p-values or logged fold-changes. You can manually reorder the results if you want (not required for this homework).
+
+
+```r
+## this takes a minute or so for JB
+deseq.results <- nbinomTest(deSeqDat, 
+                      levels(design$condition)[1], 
+                      levels(design$condition)[2])
+plotMA(deseq.results)
+```
+
+![plot of chunk unnamed-chunk-25](figure/unnamed-chunk-25.png) 
+
 
 Package these results in a data.frame called 'deseq.results' with four columns:
 
@@ -357,23 +444,44 @@ Package these results in a data.frame called 'deseq.results' with four columns:
 
 * q.value - The BH corrected p-value, aka the q-value.
 
-* log.fc - The log fold change which is the column called "logFC" in the `edgeR` results table.
+* log.fc - The log fold change which is the column called "log2FoldChange" in the `deseq` results table.
 
 Save your results for later with `write.table()` in file called `stampy.deseq.results.tsv`.
 
 
+```r
+deseq.results <- deseq.results[,c("id", "pval", "padj", "log2FoldChange")]
+colnames(deseq.results) <- c("gene.id", "p.value", "q.value", "log.fc")
+write.table(deseq.results, "results/stampy.deseq.results.tsv",
+            row.names=TRUE, col.names = NA, sep="\t")
+```
 
 
 iii) How many genes are differentially expressed between conditions at a false discovery rate (FDR) of 1e-5?
 
 
+```r
+deseq.nHits <- sum(deseq.results$q.value <= fdr)
+```
 
+
+2198 genes are differentially expressed between conditions at a false discovery rate (FDR) of 10<sup>-5</sup>.
 
 iv) How many differentially expressed genes are identified by both 'edgeR' and 'DESeq'?
 
-> The function `intersect` -- which finds the elements common to two sets (vectors) -- will be helpful.
+
+```r
+getHitsGeneId <- function(results, fdr=1e-5){
+  isDiff <- (results$q.value <= fdr)
+  return(results$gene.id[isDiff])
+}
+
+bothHitGenes <- intersect(getHitsGeneId(edger.results),
+                          getHitsGeneId(deseq.results))
+```
 
 
+2176 differentially expressed genes are identified by both 'edgeR' and 'DESeq'.
 
 
 ### d) (2pt) `voom` Differential Expression Analysis
@@ -383,9 +491,29 @@ Now you will use `voom+limma` to identify differentially expressed genes between
 i)  `voom` normalizes the counts before it converts counts to log2-cpm. Use `calcNormFactors` to normalize counts.
 
 
+```r
+norm.factor <- calcNormFactors(rcDat)
+lib.size <- colSums(rcDat)*norm.factor
+```
+
 
 
 ii)  Use `voom' to convert count data into logged CPM data and then use 'limma' to identify differentially expressed genes between conditions. 
+
+
+```r
+dat.voomed <- voom(rcDat, desMat, plot=TRUE,lib.size=lib.size)
+```
+
+![plot of chunk unnamed-chunk-30](figure/unnamed-chunk-30.png) 
+
+```r
+
+voom.fit <- eBayes(lmFit(dat.voomed, desMat))
+voom.results <- topTable(voom.fit, number=Inf, adjust.method="BH",
+                   coef = grep("condition", colnames(desMat)))
+```
+
 
 Package these results in a data.frame called 'voom.limma.results' with five columns:
 
@@ -402,17 +530,44 @@ Package these results in a data.frame called 'voom.limma.results' with five colu
 Save your results for later with `write.table()` in file called `stampy.limma.results.tsv`.
 
 
+```r
+voom.results <- voom.results[, c("P.Value", "adj.P.Val", "logFC", "t")]
+colnames(voom.results) <- c("p.value", "q.value", "log.fc", "test.stat")
+voom.results <- cbind(gene.id=rownames(voom.results), voom.results)
+```
 
 
 iii) How many genes are differentially expressed between conditions at a false discovery rate (FDR) of 1e-5?
 
 
+```r
+voomHitGenes <- getHitsGeneId(voom.results)
+```
 
+
+
+
+```
+
+Error in base::parse(text = code, srcfile = NULL) : 
+  2:0: unexpected end of input
+1: length(voomHitGenes
+   ^
+
+```
+
+ genes are differentially expressed between conditions at a false discovery rate (FDR) of 10<sup>-5</sup>.
 
 iv)  What fraction of the genes identified using `voom+limma` are also found by `edger` and `DESeq` methods? For example if the DE analysis using `voom+limma` found 1000 genes and both `edgeR` and `DESeq`  found 500 of these, the fraction of genes found would be $\frac{500}{1000}=0.5$.
 
 
+```r
+allHitGenes <- intersect(voomHitGenes, bothHitGenes)
+r <- length(allHitGenes) / length(voomHitGenes)
+```
 
+
+99.8885% of the genes identified using `voom+limma` are also found by `edger` and `DESeq` methods.
 
 ### e) (3pt) Comparison of Differential Expression Analyses
  
@@ -461,8 +616,6 @@ venn.plot <- venn.diagram(de.genes, filename = NULL, fill = c("red", "blue",
 # Draw the plot on the screen.
 grid.draw(venn.plot)
 ```
-
-![plot of chunk vennDiagram](figure/vennDiagram.png) 
 
 
 
@@ -558,35 +711,5 @@ Load it with a line like this:
 jDat <- dget("featGenesData-q3-DPUT.txt")
 ```
 
-
-
-
-![plot of chunk stripplot-five-interesting-genes](figure/stripplot-five-interesting-genes.png) 
-
-
-
-```r
-summary(cars)
-```
-
-```
-     speed           dist    
- Min.   : 4.0   Min.   :  2  
- 1st Qu.:12.0   1st Qu.: 26  
- Median :15.0   Median : 36  
- Mean   :15.4   Mean   : 43  
- 3rd Qu.:19.0   3rd Qu.: 56  
- Max.   :25.0   Max.   :120  
-```
-
-
-You can also embed plots, for example:
-
-
-```r
-plot(cars)
-```
-
-![plot of chunk unnamed-chunk-19](figure/unnamed-chunk-19.png) 
 
 
