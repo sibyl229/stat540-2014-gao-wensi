@@ -52,7 +52,7 @@ ii. A heatmap of the first 100 genes (you can try more but it gets slow).
 
 ```r
 # creating some color palette
-#jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
+jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
 jGreysFun <- colorRampPalette(brewer.pal(n = 9, "Greys"))
 
 
@@ -61,7 +61,7 @@ myheatmap <- function(sampCor, ...){
   heatmap.2(sampCor, 
             Rowv = FALSE, dendrogram="none",
             symm=TRUE, margins=c(10,10),
-            trace="none", scale="none", col = jGreysFun(256))
+            trace="none", scale="none", col = jPurplesFun(256))
 }
 
 # png("figure/sampleSwapSample.heatmap.png")
@@ -217,52 +217,83 @@ ii. Illustrate the differential expression between the batch and the chemostat s
 
 ```r
 expect_equal(rownames(design), colnames(mcDat))
+
 prepareData <- function(probeId){
   probeDat <- mcDat[rownames(mcDat)==probeId,]
+  
   newDat <- cbind(design, t(probeDat))
+  
+  # in case of multiple probes selected
+  newDat <- melt(newDat, "condition", variable_name="probe.id")
+  newDat <- rename(newDat, c("value"="expression"))  # rename column
   return(newDat)
 }
+
 topHitPid <- mcTT[1,"probe.id"]
 topHitDat <- prepareData(topHitPid)
 
-ggplot(topHitDat, aes(x=condition, y))
+p <- ggplot(topHitDat, aes(x=condition, y=expression, color=condition)) 
+p <- p + geom_point()
+p
 ```
 
-```
-Error: No layers in plot
-```
+![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13.png) 
 
 
 
 iii. How many probes are identified as differentially expressed at a false discovery rate (FDR) of 1e-5 (note: this is a FDR cutoff used in the original paper)?
 
 
+```r
+fdr <- 1e-5
+nHits <- sum(mcTT$q.value < fdr)
+```
 
+
+725 probes are identified as differentially expressed at FDR of 10<sup>-5</sup>.
 
 iv. Save your results for later with `write.table()`.
 
 > When using write.table to save the data, you need to pass the arguments `row.names = TRUE, col.names = NA` to make sure the headers are written correctly.
 
 
+```r
+write.table(mcTT, "results/condition.topTable.GSE37599.tsv",
+            row.names = TRUE, col.names = NA, sep="\t")
+```
 
 
 ## Q2) RNA-Seq Analysis
 
-We have aligned the RNA-Seq library using the [Stampy](http://www.well.ox.ac.uk/project-stampy) aligner and generated count data. The data file is available as [stampy.counts.tsv](../../examples/yeastPlatforms/data/stampy.counts.tsv). In this question you will use this data to do a differential expression analysis using different packages from Bioconductor.
+> We have aligned the RNA-Seq library using the [Stampy](http://www.well.ox.ac.uk/project-stampy) aligner and generated count data. The data file is available as [stampy.counts.tsv](../../examples/yeastPlatforms/data/stampy.counts.tsv). In this question you will use this data to do a differential expression analysis using different packages from Bioconductor.
+
 
 ### a) (1pt) Load RNA Count Data and Sanity Check
 
-Load the count data using `read.table`; you will need to pass the arguments `header=TRUE` and `row.names=1`. 
+
+```r
+rcDat <- read.table("../data/yeast/stampy.counts.tsv", 
+                    header=TRUE, row.names=1)
+```
+
 
 i) What are dimensions of the dataset? In addition to reporting number of rows and columns, make it clear what rows and columns represent. What is the difference between the rows of this dataset versus rows of the array data in question 1a?
 
-
+The dataset has 6542 rows, each representing a gene (I guess Stampy aligns to the genome?), and 6 columns, each representing a sample. Here we have genes for the rows instead of probes with the microarray data, because, first, RNA-seq doesn't use probes, and, second, with that aligner RNA transcripts are mapped to genes.
 
 
 ii) Do a sanity check to make sure there is no sample swap by plotting a heatmap of the sample correlations.
 
 
+```r
+sampleCor <- cor(rcDat)
+myheatmap(sampleCor)
+```
 
+![plot of chunk unnamed-chunk-17](figure/unnamed-chunk-17.png) 
+
+
+Since
 
 ### b) (2pt) `edgeR` Differential Expression Analysis
 
@@ -556,6 +587,6 @@ You can also embed plots, for example:
 plot(cars)
 ```
 
-![plot of chunk unnamed-chunk-15](figure/unnamed-chunk-15.png) 
+![plot of chunk unnamed-chunk-19](figure/unnamed-chunk-19.png) 
 
 

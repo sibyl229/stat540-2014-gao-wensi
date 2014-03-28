@@ -10,6 +10,8 @@ library(RColorBrewer)
 library(gplots)
 library(yeast2.db)
 library(testthat)
+library(edgeR)
+library(DESeq)
 #library(preprocessCore)  # to help normalization
 library(reshape)
 
@@ -73,7 +75,7 @@ ii. A heatmap of the first 100 genes (you can try more but it gets slow).
 
 ```{r}
 # creating some color palette
-#jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
+jPurplesFun <- colorRampPalette(brewer.pal(n = 9, "Purples"))
 jGreysFun <- colorRampPalette(brewer.pal(n = 9, "Greys"))
 
 
@@ -82,7 +84,7 @@ myheatmap <- function(sampCor, ...){
   heatmap.2(sampCor, 
             Rowv = FALSE, dendrogram="none",
             symm=TRUE, margins=c(10,10),
-            trace="none", scale="none", col = jGreysFun(256))
+            trace="none", scale="none", col = jPurplesFun(256))
 }
 
 # png("figure/sampleSwapSample.heatmap.png")
@@ -249,19 +251,30 @@ write.table(mcTT, "results/condition.topTable.GSE37599.tsv",
 
 ## Q2) RNA-Seq Analysis
 
+> We have aligned the RNA-Seq library using the [Stampy](http://www.well.ox.ac.uk/project-stampy) aligner and generated count data. The data file is available as [stampy.counts.tsv](../../examples/yeastPlatforms/data/stampy.counts.tsv). In this question you will use this data to do a differential expression analysis using different packages from Bioconductor.
+
+
 ### a) (1pt) Load RNA Count Data and Sanity Check
 
-Load the count data using `read.table`; you will need to pass the arguments `header=TRUE` and `row.names=1`. 
+```{r}
+rcDat <- read.table("../data/yeast/stampy.counts.tsv", 
+                    header=TRUE, row.names=1)
+rcDat <- rcDat[, rownames(design)]  # make sure that sample (column) order matches the design
+```
 
 i) What are dimensions of the dataset? In addition to reporting number of rows and columns, make it clear what rows and columns represent. What is the difference between the rows of this dataset versus rows of the array data in question 1a?
 
-
+The dataset has `r nrow(rcDat)` rows, each representing a gene (I guess Stampy aligns to the genome?), and `r ncol(rcDat)` columns, each representing a sample. Here we have genes for the rows instead of probes with the microarray data, because, first, RNA-seq doesn't use probes, and, second, with that aligner RNA transcripts are mapped to genes.
 
 
 ii) Do a sanity check to make sure there is no sample swap by plotting a heatmap of the sample correlations.
 
+```{r}
+sampleCor <- cor(rcDat)
+myheatmap(sampleCor)
+```
 
-
+Since samples are strongly correlated within same condition, and less correlated between different conditions, no smaple seems to have occured.
 
 ### b) (2pt) `edgeR` Differential Expression Analysis
 
@@ -269,15 +282,27 @@ Now you will use `edgeR` to identify differentially expressed genes between the 
 
 i)  Recall that `edgeR` needs to estimate the dispersion parameter in the negative binomial model using an empirical Bayes method. Estimate the dispersion parameters using `estimateGLMCommonDisp`, `estimateGLMTrendedDisp` and `estimateGLMTagwiseDisp`. Plot the tagwise dispersion against log2-CPM (counts per million).  
 
-> Seminar 7 was now corrected so that the design matrix is used as an argument of `estimateGLMTrendedDisp`.
+```{r}
+dge.glm <- DGEList(counts=rcDat, group=design$condition)
+desMat <- model.matrix(~condition, design)
+dge.glm.com.disp <- estimateGLMCommonDisp(dge.glm, desMat, verbose=TRUE)
+dge.glm.trend.disp <- estimateGLMTrendedDisp(dge.glm.com.disp, desMat)
+dge.glm.tag.disp <- estimateGLMTagwiseDisp(dge.glm.trend.disp, desMat)
+#plot the tagwise dispersion against log2-CPM (counts per million)
+plotBCV(dge.glm.tag.disp)
+```
+
 
 
 
 
 ii)  Use the glm functionality of `edgeR`, i.e. use the `glmFit` function, to identify differentially expressed genes between conditions. 
 
-
-
+```{r}
+fit <- glmFit(dge.glm.tag.disp, desMat)
+lrt <- glmLRT(fit, coef=grep("condition", colnames(desMat)))
+edger.results <- topTags(lrt, n=Inf, adjust.method="BH", sort.by="PValue")
+```
 
 Package these results in a data.frame called 'edger.results' with five columns:
 
@@ -291,9 +316,18 @@ Package these results in a data.frame called 'edger.results' with five columns:
 
 * test.stat - The test statistic, which for `edgeR` is a likelihood ratio. This is the column called "LR" in the `edgeR` results table.
 
+```{r}
+edger.results <- edger.results[,c("PValue", "FDR", "logFC", "LR")]
+colnames(edger.results) <- c("p.value", "q.value", "log.fc", "test.stat")
+edger.results <- cbind(gene.id=rownames(edger.results), edger.results)
+```
+
 Save your results for later with `write.table()` in file called `stampy.edger.results.tsv`.
 
-
+```{r}
+write.table(edger.results, "results/stampy.edger.results.tsv",
+            row.names=TRUE, col.names = NA, sep="\t")
+```
 
 
 iii) How many genes are differentially expressed between conditions at a false discovery rate (FDR) of 1e-5?
@@ -429,8 +463,6 @@ venn.plot <- venn.diagram(de.genes, filename = NULL, fill = c("red", "blue",
 # Draw the plot on the screen.
 grid.draw(venn.plot)
 ```
-
-![plot of chunk vennDiagram](figure/vennDiagram.png) 
 
 
 
