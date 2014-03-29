@@ -218,7 +218,7 @@ ii. Illustrate the differential expression between the batch and the chemostat s
 ```r
 expect_equal(rownames(design), colnames(mcDat))
 
-prepareData <- function(probeId){
+prepareDataMC <- function(probeId){
   probeDat <- mcDat[rownames(mcDat)==probeId,]
   
   newDat <- cbind(design, t(probeDat))
@@ -230,7 +230,7 @@ prepareData <- function(probeId){
 }
 
 topHitPid <- mcTT[1,"probe.id"]
-topHitDat <- prepareData(topHitPid)
+topHitDat <- prepareDataMC(topHitPid)
 
 p <- ggplot(topHitDat, aes(x=condition, y=expression, color=condition)) 
 p <- p + geom_point()
@@ -452,6 +452,7 @@ Save your results for later with `write.table()` in file called `stampy.deseq.re
 ```r
 deseq.results <- deseq.results[,c("id", "pval", "padj", "log2FoldChange")]
 colnames(deseq.results) <- c("gene.id", "p.value", "q.value", "log.fc")
+rownames(deseq.results) <- deseq.results$gene.id
 write.table(deseq.results, "results/stampy.deseq.results.tsv",
             row.names=TRUE, col.names = NA, sep="\t")
 ```
@@ -476,12 +477,21 @@ getHitsGeneId <- function(results, fdr=1e-5){
   return(results$gene.id[isDiff])
 }
 
-bothHitGenes <- intersect(getHitsGeneId(edger.results),
-                          getHitsGeneId(deseq.results))
+edgerHitGenes <- getHitsGeneId(edger.results)
+deseqHitGenes <- getHitsGeneId(deseq.results)
+bothEDHitGenes <- intersect(edgerHitGenes, deseqHitGenes)
 ```
 
 
-2176 differentially expressed genes are identified by both 'edgeR' and 'DESeq'.
+
+
+```
+
+Error in eval(expr, envir, enclos) : object 'bothHitGenes' not found
+
+```
+
+ differentially expressed genes are identified by both 'edgeR' and 'DESeq'.
 
 
 ### d) (2pt) `voom` Differential Expression Analysis
@@ -562,7 +572,7 @@ iv)  What fraction of the genes identified using `voom+limma` are also found by 
 
 
 ```r
-allHitGenes <- intersect(voomHitGenes, bothHitGenes)
+allHitGenes <- intersect(voomHitGenes, bothEDHitGenes)
 r <- length(allHitGenes) / length(voomHitGenes)
 ```
 
@@ -575,53 +585,43 @@ Now that we have the results of the differential expression analysis performed b
 
 i) In previous questions, we noticed that different methods identified different differentially expressed genes. Create a Venn diagram showing all genes identified as differentially expressed by `edgeR`, `DESeq`, and `voom+limma`. Check your if your answers to questions 2c-iv, and 2d-iv are correct.
 
-> The Venn diagram can be drawn using the `VennDiagram` package. It's a little obtuse if you want to plot to screen (or embed image using knitr), but the following code should get you started. Also be aware there is an argument called `force.unique`, which defaults to TRUE, that determines how elements that appear more than once in a set are handled when forming the Venn counts (in particular useful in question 3). 
-
 
 ```r
-library(VennDiagram)
-```
-
-```
-## Loading required package: grid
-```
-
-```r
-
-# Fake some gene names for 4 different methods.  Note that in this example,
-# I'm comparing 4 different sets so that you can see how to handle more
-# complex cases.
-
-method1.de.genes <- c("A", "B", "C")
-
-method2.de.genes <- c("A", "B", "D", "E", "F")
-
-method3.de.genes <- c("A", "B", "D", "E")
-
-method4.de.genes <- c("A", "V", "E", "F")
 
 # Put the things you want to plot in a list. The names in the list will be
 # put on the plot.
-de.genes <- list(Method1 = method1.de.genes, Method2 = method2.de.genes, Method3 = method3.de.genes, 
-    Method4 = method4.de.genes)
+de.genes <- list("edgeR"=edgerHitGenes, 
+                 "DEseq"=deseqHitGenes, 
+                 "voom+limma"=voomHitGenes)
 
 # Start a new plot
 plot.new()
 
 # Draw the Venn diagram. Note the argument `filename=NULL` tells it to
 # create a plot object instead of outputting to file.
-venn.plot <- venn.diagram(de.genes, filename = NULL, fill = c("red", "blue", 
+venn.plot <- venn.diagram(de.genes, filename = NULL, fill = c("blue", 
     "green", "yellow"))
 
 # Draw the plot on the screen.
 grid.draw(venn.plot)
 ```
 
+![plot of chunk unnamed-chunk-34](figure/unnamed-chunk-34.png) 
 
 
+
+> The Venn diagram can be drawn using the `VennDiagram` package. It's a little obtuse if you want to plot to screen (or embed image using knitr), but the following code should get you started. Also be aware there is an argument called `force.unique`, which defaults to TRUE, that determines how elements that appear more than once in a set are handled when forming the Venn counts (in particular useful in question 3). 
 
 
 ii) Using the function `plotSmear` function from `edgeR`, you can look at a scatterplot of observed differential expression (y-axis) against overall abundance (x-axis), both axes logarithmically transformed -- to check that putative DE genes seem plausible. Create a smear plot. Within this plot, identify the set of genes which are differentially expressed at an FDR of 1e-5 using all three methods (i.e., the q-values estimated by `edgeR`, `DESeq`, and `voom` are below 1e-5). Explain how you interpret this plot. Do you see reasonable results?
+
+
+```r
+plotSmear(dge.glm, de.tags=allHitGenes)
+```
+
+![plot of chunk unnamed-chunk-35](figure/unnamed-chunk-35.png) 
+
 
 > Use the output of `DGEList` as the object of `plotSmear`. Use de.tags to highlight genes selected by all methods.
 
@@ -630,47 +630,47 @@ ii) Using the function `plotSmear` function from `edgeR`, you can look at a scat
 
 iii) There are two genes identified by `edgeR` and `voom+limma` but not by `DESeq`. Illustrate the logged counts of them. Compare the (log) counts of these two genes with those of two genes identified by the three methods (see example below)
 
-> As an example, I illustrate two gene that were identified by all three methods. The function `setdiff` is helpful to find differences between two sets.
 
+```r
+bothEVHitGenes <- intersect(edgerHitGenes, voomHitGenes)
+xHits <- setdiff(bothEVHitGenes, deseqHitGenes)
 
+prepareData <- function(data, rid){
+  jDat <- data[rownames(data) %in% rid,]
+  
+  newDat <- cbind(design, t(jDat))
+  
+  # in case of multiple probes selected
+  newDat <- melt(newDat, "condition", variable_name="rid")
+  newDat <- rename(newDat, c("value"="expression"))  # rename column
+  return(newDat)
+}
 
-
-
-
+xHitsDat <- prepareData(rcDat, xHits)
+```
 
 
 
 ```r
-library(lattice)
-featureMe <- c("YDR384C", "YDR345C")
-(featureCounts <- counts[featureMe, ])
+p <- ggplot(xHitsDat, aes(y=log2(expression), x=condition, group=rid))
+p + geom_point() + geom_smooth(method="loess") + facet_grid(. ~ rid)
 ```
 
-```
-##           b1   b2   b3   c1   c2   c3
-## YDR384C  176  243  182 3332 3778 4531
-## YDR345C 6155 8629 6357  322  345  462
-```
+![plot of chunk unnamed-chunk-37](figure/unnamed-chunk-37.png) 
+
+
+This two hits are missed probably because the variance of the expression within the same condition is too large, or that the expression fold change between conditions is too small.
+
+However, when I tried use expression scaled by library size and then log2 transform. It appears that the within condition variance is not too big, nor is the between conditions fold change too small. So I'm puzzled by why DESeq (which also accounts for library coverage) misses the two.
+
 
 ```r
-featureDat <- data.frame(gene.id = factor(rep(rownames(featureCounts), ncol(featureCounts))), 
-    cond = factor(rep(groups, each = nrow(featureCounts))), log.count = log2(unlist(featureCounts)))
-stripplot(gene.id ~ log.count, featureDat, groups = cond, auto.key = TRUE, jitter = TRUE)
+p <- ggplot(prepareData(dat.voomed$E, xHits), 
+            aes(y=expression, x=condition, group=rid))
+p + geom_point() + geom_smooth(method="loess") + facet_grid(. ~ rid)
 ```
 
-![plot of chunk two-de-gene-demo](figure/two-de-gene-demo.png) 
-
-```r
-
-# Using the example created before to illustrate the `setdiff` function
-setdiff(method1.de.genes, method2.de.genes)  #'C' is present in Method1 but not in Method2
-```
-
-```
-## [1] "C"
-```
-
-
+![plot of chunk unnamed-chunk-38](figure/unnamed-chunk-38.png) 
 
 
 
@@ -678,18 +678,84 @@ setdiff(method1.de.genes, method2.de.genes)  #'C' is present in Method1 but not 
 
 In question 1, you performed a DEA of array data using `limma`. In question 2, you used different methods to perform DEA of RNA-Seq data. In particular, in this question, you will focus on the DEA using `edgeR` (question 2b) to compare the results of RNA-Seq DEA with those of the array DEA . 
 
-> Remember that you've packaged your results and saved them using `write.table()`. If the data.frames containing the results of these analyses are no longer in your workspace, load them using `read.table()`.
-
 i) Use a Venn diagram to display the overlap and non-overlap of the __genes__ identified as differentially expressed at an FDR of 1e-5 by these analyses (i.e., array vs `edgeR` differentially expressed genes).
 
-> Note that the number of __probes__ that you identified as differentially expressed at an FDR of 1e-5 in question 1c(iii) may be different from the number of __genes__ identified as differentially expressed at the same FDR! Why? The use of the argument `force.unique` of `venn.diagram()` is crucial here.
 
+
+```r
+arrayHitGenes <- getHitsGeneId(mcTT)
+
+plot.new()  # Start a new plot
+
+# note multiple probes mapped to the same gene show up as one in the Venn diagram
+venn.plot <- venn.diagram(list(array=arrayHitGenes,
+                               edgeR=edgerHitGenes),
+                          filename = NULL, fill = c("blue", "yellow"),
+                          force.unique = TRUE) 
+grid.draw(venn.plot)
+```
+
+![plot of chunk unnamed-chunk-39](figure/unnamed-chunk-39.png) 
 
 
 
 ii) As expected, more genes were identified as differentially expressed using RNA-Seq data. In this question, you will examine the difference between the q-values from both analyses (i.e., array and `edgeR`) by overlaying density plots of the q-values from each analysis.
 
-  * To respond to this question, make two plots. One plot that includes the densities of q-values of the genes analyzed by both platforms (i.e., genes shared by both data frames), and another plot that includes the densities of q-values of ALL genes analyzed by at least one of the platforms.
+
+```r
+# prepare results for comparision between array and RNAseq (edgeR)
+arrVsEdgeR <- rbind(cbind(mcTT[, c("gene.id","q.value")],
+                          platform="Microarray+limma"),
+                    cbind(edger.results[, c("gene.id","q.value")],
+                          platform="RNA-seq+edgeR"))
+
+arrEdgerBothGenes <- intersect(mcTT$gene.id, edger.results$gene.id)
+```
+
+
+  * To respond to this question, make two plots. One plot that includes the densities of q-values of the genes analyzed by both platforms (i.e., genes shared by both data frames).
+  
+
+```r
+p <- ggplot(subset(arrVsEdgeR, gene.id %in% arrEdgerBothGenes),
+            aes(x=q.value, color=platform)) + geom_density()
+p 
+```
+
+![plot of chunk unnamed-chunk-41](figure/unnamed-chunk-411.png) 
+
+```r
+
+p <- ggplot(subset(arrVsEdgeR, gene.id %in% arrEdgerBothGenes),
+            aes(x=sqrt(q.value), color=platform)) + geom_density()
+p 
+```
+
+![plot of chunk unnamed-chunk-41](figure/unnamed-chunk-412.png) 
+
+
+Since I'm mostly interested in the location of the peak in the density plot of q-value, it seems to make sense to square root transform (which is monotonic) the q.value, so I can see separation of the peaks for the two platforms better. I
+  
+  * Another plot that includes the densities of q-values of ALL genes analyzed by at least one of the platforms.
+  
+
+```r
+p <- ggplot(arrVsEdgeR, aes(x=q.value, color=platform)) + 
+  geom_density()
+p 
+```
+
+![plot of chunk unnamed-chunk-42](figure/unnamed-chunk-421.png) 
+
+```r
+
+p <- ggplot(arrVsEdgeR, aes(x=sqrt(q.value), color=platform)) + 
+  geom_density()
+p 
+```
+
+![plot of chunk unnamed-chunk-42](figure/unnamed-chunk-422.png) 
+
   
 Make some observations about the strengths of these two platforms.
   
@@ -701,15 +767,35 @@ Make some observations about the strengths of these two platforms.
 
 iii) We provide a data set with array expression and count data for 5 interesting genes; below is also code to load it and a figure depicting it. Consult the array and the `edgeR` DEA results from your previous analyses for these genes. For each gene, state its status with respect to these analyses, i.e. where it falls in those Venn diagrams. Comment on the results and plots.
 
-The data set is on GitHub and in the course webpage:
 
-  * <https://raw.github.com/jennybc/stat540_2014/master/examples/yeastPlatforms/data/featGenesData-q3-DPUT.txt>
-  * <http://www.ugrad.stat.ubc.ca/~stat540/examples/yeastPlatforms/data/featGenesData-q3-DPUT.txt>
-  
-Load it with a line like this:  
+
+```r
+jDat <- dget("../data/yeast/featGenesData-q3-DPUT.txt")
+jDat <- melt(jDat, measure.vars=c("log.count", "arrayExp"),
+             variable_name="platform")
+jDat <- rename(jDat, c("value"="expression"))
+
+p <- ggplot(jDat, aes(x=expression, y=gene.id, color=cond))
+p + geom_point(alpha=0.5) + facet_grid(.~platform)
 ```
-jDat <- dget("featGenesData-q3-DPUT.txt")
-```
+
+![plot of chunk unnamed-chunk-43](figure/unnamed-chunk-43.png) 
 
 
 
+ * "YGL209W"
+ I expect count to find no significance between the two conditions,
+ while array to find it significantly under-expressed in chemostat condition. It likely belongs to the tiny region for microarray (in the Venn diagram) that's not part of the overlapping region.
+ 
+ * "YCL042W" 
+  I expect count to find it significantly over-expressed in chemostat condition,  
+ while array to find no significance between the two conditions. It likely belongs to the big region for edgeR (in the Venn diagram) that's not part of the overlapping region.
+ 
+ * "YBL025W" 
+ I expect both count and array to find no significance between the two conditions, meaning that it does NOT belong to the Venn diagram at all.
+ 
+ * "YDR384C" 
+ I expect both count and array to find it significantly over-expressed in chemostat condition, meaning that it belongs to the overlapping region of the Venn diagram.
+ 
+ * "YDR345C"
+ I expect both count and array to find it significantly under-expressed in chemostat condition, meaning that it belongs to the overlapping region of the Venn diagram.
