@@ -25,7 +25,7 @@ mcDat <- read.table("../data/yeast/GSE37599-data.tsv",
   
 What are dimensions of the dataset? In addition to reporting number of rows and columns, make it clear what rows and columns represent and how you're interpreting column names.
 
-The dataset has 10928 rows, each of which represents a probe. It has 10928 columns, each of which represents a sample. 
+The dataset has 10928 rows, each of which represents a probe. It has 6 columns, each of which represents a sample. 
 
 First letter in the column name refers to the condition (batch vs chemostat) and the number refers to which replicate the sample belongs to.
 
@@ -45,7 +45,7 @@ i. (High volume) scatter plot matrix.
 
 ![Scatter plot across all pair of samples](figure/sampleSwap.scatter.png)
 
-b1 and c2 are swapped, because the scatter plots show that b1 and c1 are each better correlated (showing less scatter) with samples of the Opposite condition than samples of its labeled condition.
+b1 and c2 are swapped, because the scatter plots show that b1 and c2 are each better correlated (showing less scatter) with samples of the Opposite condition than samples of its labeled condition.
 
 ii. A heatmap of the first 100 genes (you can try more but it gets slow).
 
@@ -64,6 +64,7 @@ myheatmap <- function(sampCor, ...){
             trace="none", scale="none", col = jPurplesFun(256))
 }
 
+# cooment out because it's slow
 # png("figure/sampleSwapSample.heatmap.png")
 # myheatmap(as.matrix(mcDat[1:100,]))
 # dev.off()
@@ -84,6 +85,8 @@ myheatmap(sampleCor)
 ![plot of chunk unnamed-chunk-7](figure/unnamed-chunk-7.png) 
 
 
+Darker color here means stronger correlation between the corresponding pair of samples. b1 are more correlated with c1 and c3, opposite of b1's labeled group.
+Similarly for c2, more correlated to samples of the oppositely labeled samples.
 
 iv. Scatterplot the six data samples with respect to the first two principal components and label the samples.
 
@@ -104,17 +107,19 @@ chemoSmpls <- grep("c", sampleLabels, value=TRUE)
 design <- createDesign(mcDat, 
                        chemoLabels=chemoSmpls)
 
-mcPC <- prcomp(mcDat)$rotation[,1:2]
+mcPC <- prcomp(mcDat, scale=TRUE)$rotation[,1:2]
 mcPC <- cbind(design, mcPC)
 p <- ggplot(mcPC, aes(x=PC1, y=PC2, color=condition, 
                        label=rownames(mcPC)))
 p <- p + geom_point() 
 p <- p + geom_text()
+p
 ```
 
+![plot of chunk unnamed-chunk-8](figure/unnamed-chunk-8.png) 
 
 
-> Hint: If using the base graphics function `plot()`, a subsequent call to the `text()` function can be used to label each point with the corresponding sample name.
+The first two principal components of b1 and c2 are quite dissimilar to those of other samples labeled with the same condtion, while more similar to the principal components of the samples of the labeled the opposite codition.
 
 ### c) (2pt) Microarray Differential Expression
 
@@ -156,6 +161,7 @@ myheatmap(sampleCor)
 ![plot of chunk unnamed-chunk-9](figure/unnamed-chunk-9.png) 
 
 
+After fixing the sample swap, samples of the same condition are more similar to each other (shown by the high correlation - in dark color), than samples of differnet conditions.
 
 Now use this data to do a differential expression analysis with `limma`.
 
@@ -239,6 +245,8 @@ p
 
 ![plot of chunk unnamed-chunk-13](figure/unnamed-chunk-13.png) 
 
+
+Top hit shows little within group (condition) differnces, but very large between group (conditions) differences. This makes sense that limma picks it as significant, because the small within group difference is unlikely to produces by chance the large difference across groups.
 
 
 iii. How many probes are identified as differentially expressed at a false discovery rate (FDR) of 1e-5 (note: this is a FDR cutoff used in the original paper)?
@@ -483,15 +491,7 @@ bothEDHitGenes <- intersect(edgerHitGenes, deseqHitGenes)
 ```
 
 
-
-
-```
-
-Error in eval(expr, envir, enclos) : object 'bothHitGenes' not found
-
-```
-
- differentially expressed genes are identified by both 'edgeR' and 'DESeq'.
+2176 differentially expressed genes are identified by both 'edgeR' and 'DESeq'.
 
 
 ### d) (2pt) `voom` Differential Expression Analysis
@@ -623,6 +623,10 @@ plotSmear(dge.glm, de.tags=allHitGenes)
 ![plot of chunk unnamed-chunk-35](figure/unnamed-chunk-35.png) 
 
 
+The red dots marking the genes that 3 methods all identify as significantly differentially expressed. These genes have in common that they are expressed in a relatively large amount (CPM) and their expression fold change is noticeable between the conditions.
+
+This makes sense because if a gene's overall abundance is small, a small fluctuation by chance would result in a big fold change. On the other hand, gene of great abundance changing by a big number may only mean a small fold change. These genes don't appear in the hits agreed upon by all 3 methods.
+
 > Use the output of `DGEList` as the object of `plotSmear`. Use de.tags to highlight genes selected by all methods.
 
 
@@ -661,7 +665,7 @@ p + geom_point() + geom_smooth(method="loess") + facet_grid(. ~ rid)
 
 This two hits are missed probably because the variance of the expression within the same condition is too large, or that the expression fold change between conditions is too small.
 
-However, when I tried use expression scaled by library size and then log2 transform. It appears that the within condition variance is not too big, nor is the between conditions fold change too small. So I'm puzzled by why DESeq (which also accounts for library coverage) misses the two.
+I tried use expression scaled by library size and then log2 transform.
 
 
 ```r
@@ -697,6 +701,8 @@ grid.draw(venn.plot)
 
 ![plot of chunk unnamed-chunk-39](figure/unnamed-chunk-39.png) 
 
+
+RNA-seq (with EdgeR) finds vast majority to hits found by microarray (with limma). This is probably due to the larger dynamic range of count data than signal intensity, making RNA-seq better at detecting expression changes. (more sensitive and powerful?)
 
 
 ii) As expected, more genes were identified as differentially expressed using RNA-Seq data. In this question, you will examine the difference between the q-values from both analyses (i.e., array and `edgeR`) by overlaying density plots of the q-values from each analysis.
@@ -734,14 +740,16 @@ p
 ![plot of chunk unnamed-chunk-41](figure/unnamed-chunk-412.png) 
 
 
-Since I'm mostly interested in the location of the peak in the density plot of q-value, it seems to make sense to square root transform (which is monotonic) the q.value, so I can see separation of the peaks for the two platforms better. I
+Since I'm mostly interested in the location of the peak in the density plot of q-value, it seems to make sense to square root transform (which is monotonic) the q.value, so I can see separation of the peaks for the two platforms better. 
+
+It seems that RNA-seq has peak of q.value density plot shifted slightly to the left, regardless of using genes appearing in both (plots above) or either (plots below) analysis. This probably indicates that RNA-seq is more powerful test for differential analysis.
   
   * Another plot that includes the densities of q-values of ALL genes analyzed by at least one of the platforms.
   
 
 ```r
 p <- ggplot(arrVsEdgeR, aes(x=q.value, color=platform)) + 
-  geom_density()
+  geom_density() + xlim(0,0.1)
 p 
 ```
 
@@ -756,14 +764,10 @@ p
 
 ![plot of chunk unnamed-chunk-42](figure/unnamed-chunk-422.png) 
 
-  
+
+
+
 Make some observations about the strengths of these two platforms.
-  
-
-
-
-
-
 
 iii) We provide a data set with array expression and count data for 5 interesting genes; below is also code to load it and a figure depicting it. Consult the array and the `edgeR` DEA results from your previous analyses for these genes. For each gene, state its status with respect to these analyses, i.e. where it falls in those Venn diagrams. Comment on the results and plots.
 
@@ -799,3 +803,5 @@ p + geom_point(alpha=0.5) + facet_grid(.~platform)
  
  * "YDR345C"
  I expect both count and array to find it significantly under-expressed in chemostat condition, meaning that it belongs to the overlapping region of the Venn diagram.
+ 
+Because microarray and RNA-seq are quite different techniques, they don't necessarily detect the same change in expression. For example a microarray might not be able to detect small expression change or change beyond saturation of the signal. Also some ways of using RNA-seq ignores the effect of expression changes across different isoform of the same gene, which is an effect that might be picked up my some microarray. It's possible for the two platform (microarray and RNAseq) to give very different results (over whether a gene is diffentially expressed). To determine which technique to use may depend on the question.
