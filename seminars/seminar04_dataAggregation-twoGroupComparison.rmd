@@ -73,14 +73,13 @@ Let's grab the data from 6 genes. I've picked them for you: 3 are interesting ('
 ```{r}
 keepGenes <- c("1431708_a_at", "1424336_at", "1454696_at",
                "1416119_at", "1432141_x_at", "1429226_at" )
-miniDat <- subset(prDat, rownames(prDat) %in% keepGenes)
 ```
 
 
 
 ```{r}
 prepareData <- function(jDat, design){
-  jDat <- jDat[design$sidChar]
+  jDat <- jDat[, design$sidChar]
   newDat <- cbind(design, t(jDat))
   
   # in case of multiple probes selected
@@ -91,7 +90,8 @@ prepareData <- function(jDat, design){
   return(newDat)
 }
 
-miniDat <- prepareData(miniDat, prDes)
+miniDat <- prepareData(subset(prDat, rownames(prDat) %in% keepGenes),
+                       prDes)
 str(miniDat)
 ```
 

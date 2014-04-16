@@ -1,0 +1,258 @@
+Fitting and interpreting linear models (low volume)
+======================================================================
+
+```{r include = FALSE}
+library(knitr)
+opts_chunk$set(tidy = FALSE)
+```
+
+
+```{r}
+library(ggplot2) 
+library(lattice)
+library(reshape) # for the function melt
+library(plyr)
+prDat <- read.table("../data/photoRec/GSE4051_data.tsv")
+str(prDat, max.level = 0)
+prDes <- readRDS("../data/photoRec/GSE4051_design.rds")
+str(prDes)
+```
+
+## Write a function to prepare a mini-dataset for a small number of genes
+
+```{r}
+prepareData <- function(genes){
+  jDat <- prDat[genes, prDes$sidChar]
+  newDat <- cbind(prDes, t(jDat))
+  
+  # in case of multiple probes selected
+  newDat <- melt(newDat,
+                 measure.vars=grep("_at", colnames(newDat), value=TRUE))
+  newDat <- rename(newDat, c("value"="gExp",
+                             "variable"="gene"))  # rename column
+  return(newDat)
+}
+```
+
+```{r}
+(luckyGenes <- c("1419655_at","1438815_at"))
+jDat <- prepareData(luckyGenes)
+str(jDat)
+head(jDat)
+tail(jDat)
+```
+
+
+## Write a function to stripplot a mini-dataset
+
+```{r}
+makeStripplot <- function(myDat, ...) {
+  p <- ggplot(myDat, 
+              aes(x=devStage, y=gExp, color=gType, group=gType))
+  p <- p + facet_wrap(~gene) + geom_point() 
+  p <- p + stat_summary(fun.y=mean, geom="line")
+  # p <- p + geom_line(stat = "summary", fun.y = mean)  # alternatively
+  return(p)
+}
+```
+
+```{r}
+makeStripplot(newDat <- prepareData(luckyGenes))
+str(newDat)
+head(newDat)
+```
+
+  
+## Do a two-sample t-test
+
+Let's test for a difference in expected gene expression for probeset "1456341\_a\_at" at developmental stage P2 vs. 4 weeks post-natal (ignoring genotype, i.e. lump the wild types and knockouts together). Let's assume a common variance in the two groups.
+
+```{r}
+makeStripplot(jDat <- prepareData("1438786_a_at"))
+t.test(gExp ~ devStage, jDat, 
+       subset=devStage %in% c("P2", "4_weeks"),
+       val.eqaul=TRUE # common varaince for the two groups
+       )
+```
+
+## Fit a linear model with a categorical covariate
+
+In other words, do "one-way ANOVA".
+
+Focus on probeset "1438786\_a\_at". Here's what the data should look like:
+
+```{r}
+mDat <- prepareData("1438786_a_at")
+mDat <- subset(mDat, gType == "wt")
+makeStripplot(mDat)
+```
+
+Let's focus just on the wild type data for now. Model expression as a function of the devStage factor. 
+```{r}
+mFit <- lm(gExp ~ devStage, mDat)
+summary(mFit)
+```
+Vet your inferential results: does the intercept look plausible given the plot? How about the `devStageP2` effect, etc.?
+
+Yes, the intercept is the average expression for wt at E16.
+Intercept + devStageP2 = average gExp at P2.
+
+## Perform inference for a contrast
+
+The "W" shape of the expression profile for "1438786\_a\_at" means that the expression values for developmental stages P2 and P10 are quite similar. We could formally test whether the P2 and P10 effects are equal or, equivalently, whether their difference is equal to zero.
+
+Contrast matrix
+```{r}
+(contMat <- 
+   (names(coef(mFit)) == "devStageP2") -
+   (names(coef(mFit)) == "devStageP10"))
+
+(contMat <- matrix(contMat, nrow=1, 
+                   dimnames=list(1, names(coef(mFit)))))
+```
+
+
+```{r}
+(diff1 <- contMat %*% coef(mFit))
+
+mMeanExp <- daply(mDat, ~devStage, summarize, mean.gExp=mean(gExp))
+(mMeanExp <- unlist(mMeanExp))
+
+mMeanExp["P2"] - mMeanExp["P10"]
+```
+
+
+Now we need the (estimated) standard error for our contrast. The variance-covariance matrix of the parameters estimated in the original model can be obtained with `vcov()` and is equal to $(X^{T}X)^{-1}\hat{\sigma}^{2}$. 
+```{r}
+vcov(mFit)
+```
+
+Let's check that this is really true. If we take the diagonal elements and take their square root, they should be exactly equal to the standard errors reported for out original model. Are they?
+```{r}
+summary(mFit)$coefficients[ , "Std. Error"]
+sqrt(diag(vcov(mFit)))
+```
+Yes! Note for the future that you can get the typical matrix of inferential results from most fitted model objects for further computing like so:
+```{r}
+summary(mFit)$coefficients
+```
+Returning to our test of the P2 vs. P10 contrast, recall that the variance-covariance matrix of a contrast obtained as $C\hat{\alpha}$ is $C(X^{T}X)^{-1}C^{T}\hat{\sigma}^{2}$.
+
+```{r}
+(estSe <- contMat %*% vcov(mFit) %*% t(contMat))
+```
+
+Now we form a test statistic as an observed effect divided by its estimated standard error:
+```{r}
+(testStat <- diff1/estSe)
+```
+
+Under the null hypothesis that the contrast equals zero, i.e. there is no true difference in mean for expression at P2 and P10 in wild type mice for this gene, the test statistic has a $t$ distribution with $n - p = 20 - 5 = 15$ degrees of freedom. We compute a two-sided p-value and we're done.
+
+```{r}
+2 * pt(abs(testStat), df = df.residual(mFit), lower.tail = FALSE)
+```
+Not surprisingly, this p-value is rather large and we conclude there is no difference.
+
+## Fit a linear model with two categorical covariates
+
+Let's focus on probeset "1448690_at". 
+```{r}
+makeStripplot(oDat <- prepareData("1448690_at"))
+str(oDat)
+```
+Fit a linear model with covariates `gType` and `devStage` and include their interactions.
+
+```{r, echo=FALSE}
+oFitBig <- lm(gExp ~ gType * devStage, oDat)
+summary(oFitBig)$coef
+```
+
+Vet the results. Is the intercept plausible? How about the various effects?
+
+Evidence for some devStage effect, a little bit evidence for gType effect, and no evidence for any interaction effect between devStage and gType.
+
+Do the ones with small p-values, e.g. meeting a conventional cut-off of 0.05, look 'real' to you?
+
+Fit a related, smaller model with the same covariates, but this time omit the interaction. I'm calling mine `oFitSmall` and here's an excerpt of the report you should get.
+```{r}
+oFitSmall <- lm(gExp ~ gType + devStage, oDat)
+summary(oFitSmall)$coef
+```
+
+```{r}
+anova(oFitSmall, oFitBig)
+```
+
+There is no evidence for interaction in this particular case.
+
+If you'd like to get a more exciting result, take a look at probeset "1429225_at". Here are my plots, excerpts from the fitted model reports, and the F test for interaction. See if you can duplicate this.
+
+```{r, echo=FALSE}
+makeStripplot(pDat <- prepareData("1429225_at"), cex = 2)
+pFitBig <- lm(gExp ~ gType * devStage, pDat)
+summary(pFitBig)$coef
+pFitSmall <- lm(gExp ~ gType + devStage, pDat)
+summary(pFitSmall)$coef
+anova(pFitSmall, pFitBig)
+```
+
+Not surprisingly, the interaction here is highly statistically significant.
+
+## Ideas for further work
+
+We wrote functions to prepare and plot data for more than 1 gene. But when we started fitting models and conducting tests, we only worked with 1 gene at a time. Can you use data aggregation strategies from last week to do some of the same work for small sets of genes? 
+
+```{r}
+hasInteraction <- function(geneId){
+  pDat <- prepareData(geneId)
+  pFitBig <- lm(gExp ~ gType * devStage, pDat)
+  pFitSmall <- lm(gExp ~ gType + devStage, pDat)
+  afit<- anova(pFitSmall, pFitBig)
+  pval <- afit[2,"Pr(>F)"] 
+  return(pval)
+}
+
+n <- 25
+set.seed(12)
+samp <- sample(1:nrow(prDat), size=n)
+sampGenes <- rownames(prDat[samp,])
+ldply(sampGenes, function(gid){
+  pVal.F <- hasInteraction(gid)
+  result <- data.frame(pid=gid, pVal.F=pVal.F)
+  return(result)
+})
+```
+
+In lecture we also experimented with a quantitative version of devStage, which we called `age`. This opens the door to modelling with a quantitative covariate. Can you fit linear and quadratic models to the expression data for one or several genes?
+
+```{r}
+prDes$age <- as.numeric(
+  revalue(as.character(prDes$devStage), 
+          c('E16'=-2, 'P2'=2, 'P6'=6, 'P10'=10, '4_weeks'=28)))
+str(prDes)
+head(prDes)
+```
+
+```{r}
+xDat <- prepareData("1438815_at")
+xDat <- subset(xDat, gType=="wt" & age <28)
+xSmallFit <- lm(gExp ~ age, xDat)
+xBigFit <- lm(gExp ~ age + I(age^2), xDat)
+anova(xSmallFit, xBigFit)
+```
+
+I noticed that the 4 week developmental stage generally posed a difficult fitting problem for the quadratic model where we regressed expression on age. I think it is simply too far separated in time to be easily modelled quantitatively with the other 4 developmental stages. It would be interesting to drop the 4 week data and revisit this dataset with linear and quadratic models.
+
+```{r}
+makeFittedPlot <- function(myDat, formula = y ~ x + I(x^2)) {
+  p <- ggplot(myDat, 
+              aes(x=age, y=gExp, color=gType, group=gType))
+  p <- p + facet_wrap(~gene) + geom_point()
+  # p <- p + geom_line(stat = "summary", fun.y = mean)  # alternatively
+  p <- p + stat_smooth(method = "glm", se=FALSE, formula = formula)
+  return(p)
+}
+makeFittedPlot(xDat)
+```
+
